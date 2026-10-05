@@ -7,12 +7,15 @@
 
 A tiny crypto price desk ticker for the Waveshare 1.47" ESP32-C6 boards.
 
+
 <p align="center">
   <img src="docs/img/transitions.webp" width="240" alt="valumi gliding from BTC to ETH to SOL">
 </p>
 
+
 Native C on ESP-IDF, drawing to the panel through `esp_lcd` with its own
 render loop.
+
 
 <table align="center">
   <tr>
@@ -31,12 +34,12 @@ render loop.
   each candle's close; a smooth line through the real highs and lows of each
   swing; or the close line over a band from each candle's low to its high.
   The right edge always ends at the live price.
-- **Transitions**: crossfade or dip, 0.2-3 s, with adjustable fade. Time per
-  coin from 0 s (a continuous scroll) to 15 s.
+- **Transitions**: crossfade or dip, 0.2-3s, with adjustable fade. Time per
+  coin from 0s (a continuous scroll) to 15s.
 - **Brightness** and **night dimming** on a schedule, with a time zone.
-- **Touch board extras** (all inert on the plain board): swipe to change
-  coin, rest a finger to hold one, and the accelerometer keeps the picture
-  upright, turning it with a short animation when the board is flipped.
+- **Touch board extras**: swipe to change coin, rest a finger to hold one,
+  and the accelerometer keeps the picturebupright, turning it with a short
+  animation when the board is flipped.
 - **Several Wi-Fi networks in preference order.** The ticker takes the first
   that answers, so it can work in multiple locations without config changes
   and moves up to a preferred network when it reappears.
