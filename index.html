@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>valumi installer</title>
+<meta name="description" content="Install valumi, a tiny crypto price ticker, on a Waveshare 1.47&quot; ESP32-C6 board from your browser.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #0c0e11; --card: #15181c; --line: #272c32; --text: #ebeef5; --dim: #8b93a3;
+    --accent: #ffc83c; --accent-ink: #1a1405;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 56px 20px 64px; }
+  .logo { display: block; width: 168px; margin: 0 auto 10px; }
+  .tagline { text-align: center; color: var(--dim); margin: 0 0 36px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 24px 22px; margin-bottom: 18px; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; letter-spacing: .02em; }
+  ol { margin: 0; padding-left: 20px; }
+  li { margin: 6px 0; }
+  .install { text-align: center; padding: 30px 22px; }
+  esp-web-install-button button[slot="activate"] {
+    background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px;
+    font: 600 17px/1 inherit; padding: 15px 34px; cursor: pointer;
+  }
+  esp-web-install-button button[slot="activate"]:hover { filter: brightness(1.06); }
+  .version { color: var(--dim); font-size: 13px; margin-top: 14px; }
+  .note { color: var(--dim); font-size: 14px; }
+  a { color: var(--accent); }
+  code { background: #1f2329; border-radius: 4px; padding: 1px 5px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="logo.png" alt="valumi">
+  <p class="tagline">A tiny crypto price ticker for the Waveshare 1.47" ESP32-C6 boards.</p>
+
+  <div class="card install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install valumi</button>
+      <span slot="unsupported">
+        Your browser can't talk to USB devices. Open this page in
+        <b>Chrome</b> or <b>Edge</b> on a computer.
+      </span>
+      <span slot="not-allowed">Open this page over https to install.</span>
+    </esp-web-install-button>
+    <div class="version">Version 1.1 &middot; plain and touch boards</div>
+  </div>
+
+  <div class="card">
+    <h2>How to install</h2>
+    <ol>
+      <li>Plug the board into this computer with a USB-C <b>data</b> cable.</li>
+      <li>Click <b>Install valumi</b> and choose the board's port
+        (<i>USB JTAG/serial debug unit</i>).</li>
+      <li>Wait about a minute until it says it's done.</li>
+    </ol>
+    <p class="note">No port listed? Try another cable (many only carry power), or hold the
+      board's <b>BOOT</b> button while plugging it in.</p>
+  </div>
+
+  <div class="card">
+    <h2>Then</h2>
+    <ol>
+      <li>The ticker shows a QR code for its own Wi-Fi hotspot,
+        <code>VALUMI-XXXX</code>. Scan it with your phone.</li>
+      <li>Tap <b>Sign in to network</b> when your phone offers it, or turn mobile
+        data off and open <code>http://4.3.2.1</code>.</li>
+      <li>Add your Wi-Fi network. The ticker joins it and shows its address and
+        panel password.</li>
+    </ol>
+    <p class="note">Already running valumi? Update from the ticker's own panel instead
+      (<i>Device &rarr; Firmware update</i>) with the file from
+      <a href="https://github.com/tekr/valumi/releases">Releases</a>: that keeps your
+      settings. Installing here starts fresh.</p>
+  </div>
+
+  <p class="note" style="text-align:center">
+    <a href="https://github.com/tekr/valumi">Source and documentation on GitHub</a>
+  </p>
+</main>
+</body>
+</html>
