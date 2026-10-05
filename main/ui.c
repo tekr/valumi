@@ -48,11 +48,12 @@
 #define COL_DOWN_FILL board_rgb565(255, 82, 95)
 
 /* ---- Per-frame draw state (set by ui_draw_page) ------------------------- */
-/* The page alpha and x offset thread through every helper; keeping them in
- * statics for the duration of one ui_draw_page call keeps the signatures
- * readable. Rendering stays single-threaded by design. */
+/* The alpha and offset of the row being drawn thread through every helper;
+ * keeping them in statics for the duration of one ui_draw_page_rows call
+ * keeps the signatures readable. Rendering stays single-threaded by design. */
 static uint8_t s_alpha = 255;
 static int s_xoff = 0;
+static int s_yoff = 0;
 
 /* Lerp a colour toward the background by the current page alpha, so a faded
  * page's elements sink into the backdrop rather than toward black. */
@@ -158,15 +159,6 @@ static void draw_triangle_aa(uint16_t *fb, int x, int y, int w, bool up, uint16_
     }
 }
 
-/* @p a, n points spread across w columns, linearly interpolated at @p col. */
-static float at_column(const float *a, int n, int col, int w)
-{
-    float fpos = (float)col * (float)(n - 1) / (float)(w - 1);
-    int idx = (int)fpos;
-    float frac = fpos - (float)idx;
-    return idx + 1 < n ? a[idx] * (1.0f - frac) + a[idx + 1] * frac : a[idx];
-}
-
 static void widen(float *lo, float *hi, const float *v, int n)
 {
     for (int i = 0; i < n; i++) {
@@ -175,13 +167,221 @@ static void widen(float *lo, float *hi, const float *v, int n)
     }
 }
 
+/* ---- The chart line ----------------------------------------------------- */
+
+/* The chart is most of the pixels a frame blends, so its fills write the
+ * frame buffer directly -- the caller keeps inside the clip window -- with a
+ * colour unpacked once and an opacity of 0..256, which blends with shifts. */
+typedef struct {
+    int r, g, b;
+} rgb_t;
+
+static rgb_t unpack(uint16_t panel_col)
+{
+    uint16_t c = (uint16_t)((panel_col >> 8) | (panel_col << 8));
+    return (rgb_t){(c >> 11) & 0x1F, (c >> 5) & 0x3F, c & 0x1F};
+}
+
+static inline void blend_into(uint16_t *p, rgb_t fg, int a256)
+{
+    uint16_t bg = (uint16_t)((*p >> 8) | (*p << 8));
+    int r = (bg >> 11) & 0x1F, g = (bg >> 5) & 0x3F, b = bg & 0x1F;
+    r += ((fg.r - r) * a256) >> 8;
+    g += ((fg.g - g) * a256) >> 8;
+    b += ((fg.b - b) * a256) >> 8;
+    uint16_t out = (uint16_t)((r << 11) | (g << 5) | b);
+    *p = (uint16_t)((out >> 8) | (out << 8));
+}
+
+/* Positions along the line are kept in 1/32 px, so the stroke's edges land
+ * between pixels and can be blended by how much of each pixel they cover. */
+#define SQ 32
+#define STROKE_HALF SQ /* half the line's width: a 2 px stroke */
+#define STROKE_SUB 2   /* samples across each pixel column */
+#define STROKE_WIN (STROKE_HALF * STROKE_SUB / SQ) /* samples in half a width */
+#define STROKE_PAD 4   /* rows the stroke may reach above or below the chart */
+#define DOT_RADIUS (SQ * 33 / 10)
+/* The widest chart: one point a column, as the highs-and-lows line has. */
+#define LINE_W (BOARD_LCD_V_RES - 2 * MARGIN)
+
+/* @p n heights spread evenly across a chart @p w columns wide, in 1/32 px
+ * down from the chart's top. Whole numbers from here on: this chip has no
+ * floating-point unit, and all of this runs twice a frame while a page is
+ * changing. */
+typedef struct {
+    const int16_t *y;
+    int n, w;
+} heights_t;
+
+/* The height at pixel column @p col. */
+static int height_at(const heights_t *hs, int col)
+{
+    int at = col * (hs->n - 1);
+    int i = at / (hs->w - 1), rem = at % (hs->w - 1);
+    return i + 1 < hs->n ? hs->y[i] + (hs->y[i + 1] - hs->y[i]) * rem / (hs->w - 1) : hs->y[i];
+}
+
+/* Walks a line left to right, giving its height at each sample. */
+typedef struct {
+    const heights_t *hs;
+    int span;            /* from the first point to the last, 1/32 px */
+    int seg, xa, xb;     /* the segment under the walker, and its ends */
+    int half;            /* how far the stroke reaches above and below it */
+} stroke_walk_t;
+
+/* Take segment @p seg. The stroke's reach is its half width stretched by
+ * the slope, so a steep run is as thick as a flat one. */
+static void stroke_segment(stroke_walk_t *s, int seg)
+{
+    const heights_t *hs = s->hs;
+    s->seg = seg;
+    s->xa = seg * s->span / (hs->n - 1);
+    s->xb = (seg + 1) * s->span / (hs->n - 1);
+    int adx = s->xb - s->xa;
+    int ady = hs->y[seg + 1] - hs->y[seg];
+    ady = ady < 0 ? -ady : ady;
+    /* The segment's length without a square root: within 7%. */
+    int len = adx > ady ? adx + ady * 3 / 8 : ady + adx * 3 / 8;
+    s->half = adx > 0 ? STROKE_HALF * len / adx : STROKE_HALF;
+}
+
+/* The line's height @p t along it (0 = the first point), and its reach
+ * there in @p half: -1 beyond the ends. @p t must not decrease from one
+ * call to the next. */
+static int stroke_sample(stroke_walk_t *s, int t, int *half)
+{
+    const heights_t *hs = s->hs;
+    if (t <= 0 || t >= s->span) {
+        *half = (t < -STROKE_HALF || t > s->span + STROKE_HALF) ? -1 : STROKE_HALF;
+        return t <= 0 ? hs->y[0] : hs->y[hs->n - 1];
+    }
+    while (t >= s->xb && s->seg < hs->n - 2) {
+        stroke_segment(s, s->seg + 1);
+    }
+    *half = s->half;
+    int adx = s->xb - s->xa;
+    return adx > 0 ? hs->y[s->seg] + (hs->y[s->seg + 1] - hs->y[s->seg]) * (t - s->xa) / adx
+                   : hs->y[s->seg];
+}
+
+static int isqrt(int v)
+{
+    int r = 0;
+    for (int bit = 1 << 14; bit; bit >>= 1) {
+        if ((r + bit) * (r + bit) <= v) {
+            r += bit;
+        }
+    }
+    return r;
+}
+
+/* A filled disc with a blended rim; centre and radius in 1/32 px. */
+static void draw_disc_aa(uint16_t *fb, int cxq, int cyq, int rq, uint16_t color)
+{
+    for (int py = (cyq - rq) / SQ - 1; py <= (cyq + rq) / SQ + 1; py++) {
+        for (int px = (cxq - rq) / SQ - 1; px <= (cxq + rq) / SQ + 1; px++) {
+            int dx = px * SQ + SQ / 2 - cxq, dy = py * SQ + SQ / 2 - cyq;
+            int cover = rq + SQ / 2 - isqrt(dx * dx + dy * dy);
+            if (cover > 0) {
+                board_gfx_blend_pixel(fb, px, py, color,
+                                      (uint8_t)(cover >= SQ ? 255 : cover * 255 / SQ));
+            }
+        }
+    }
+}
+
+/* The line through @p hs as a smooth 2 px stroke ending in the live dot,
+ * with the chart's top-left at (x, y).
+ *
+ * The line never doubles back, so it is drawn a pixel column at a time: at
+ * a couple of places across the column the stroke covers a run of rows, and
+ * each pixel takes the line's colour by how much of it those runs cover. At
+ * a peak or a trough the run is cut off a half width past the turn, or the
+ * stretch for the slope would draw a spike there. */
+static void draw_stroke_aa(uint16_t *fb, int x, int y, const heights_t *hs, uint16_t color)
+{
+    stroke_walk_t s = {.hs = hs, .span = (hs->w - 1) * SQ};
+    stroke_segment(&s, 0);
+
+    /* Only the columns inside the clip window: most of a page that is
+     * sliding in is not on screen yet. One column either side of the chart
+     * as well, where the stroke's ends are capped. */
+    int cx0, cy0, cx1, cy1;
+    board_gfx_get_clip(&cx0, &cy0, &cx1, &cy1);
+    int col_from = cx0 - x > -1 ? cx0 - x : -1;
+    int col_to = cx1 - 1 - x < hs->w ? cx1 - 1 - x : hs->w;
+
+    /* ring[] holds the sample being drawn with the STROKE_WIN either side
+     * of it, which is where a nearby turn shows up. */
+    enum { RING = 2 * STROKE_WIN + 1, STEP = SQ / STROKE_SUB };
+    int ring_y[RING], ring_half[RING];
+    /* Sample i sits at this distance along the line. */
+#define SAMPLE_T(i) ((i) * STEP + STEP / 2 - SQ - SQ / 2)
+    int first = (col_from + 1) * STROKE_SUB;
+    for (int i = 0; i < RING - 1; i++) {
+        ring_y[i] = stroke_sample(&s, SAMPLE_T(first + i - STROKE_WIN), &ring_half[i]);
+    }
+    int newest = RING - 1; /* where the next sample goes; the middle is STROKE_WIN on */
+
+    rgb_t ink = unpack(color);
+    int stride = board_display_width();
+    uint16_t acc[SPARK_H + 2 * STROKE_PAD] = {0};
+    const int rows = (int)(sizeof(acc) / sizeof(acc[0]));
+    for (int col = col_from; col <= col_to; col++) {
+        int r_lo = rows, r_hi = -1;
+        for (int sub = 0; sub < STROKE_SUB; sub++) {
+            int i = (col + 1) * STROKE_SUB + sub;
+            ring_y[newest] = stroke_sample(&s, SAMPLE_T(i + STROKE_WIN), &ring_half[newest]);
+            newest = (newest + 1) % RING;
+            int mid = (newest + STROKE_WIN) % RING;
+
+            int yc = ring_y[mid], half = ring_half[mid];
+            if (half < 0) {
+                continue;
+            }
+            int near_lo = yc, near_hi = yc;
+            for (int j = 0; j < RING; j++) {
+                near_lo = ring_y[j] < near_lo ? ring_y[j] : near_lo;
+                near_hi = ring_y[j] > near_hi ? ring_y[j] : near_hi;
+            }
+            int top = yc - half, bot = yc + half;
+            top = top < near_lo - STROKE_HALF ? near_lo - STROKE_HALF : top;
+            bot = bot > near_hi + STROKE_HALF ? near_hi + STROKE_HALF : bot;
+            top += STROKE_PAD * SQ; /* into acc[]'s rows, and clear of zero */
+            bot += STROKE_PAD * SQ;
+            int r0 = top / SQ, r1 = (bot - 1) / SQ;
+            r0 = r0 < 0 ? 0 : r0;
+            r1 = r1 >= rows ? rows - 1 : r1;
+            for (int r = r0; r <= r1; r++) {
+                int from = top > r * SQ ? top : r * SQ;
+                int to = bot < (r + 1) * SQ ? bot : (r + 1) * SQ;
+                acc[r] = (uint16_t)(acc[r] + to - from);
+            }
+            r_lo = r0 < r_lo ? r0 : r_lo;
+            r_hi = r1 > r_hi ? r1 : r_hi;
+        }
+        uint16_t *px = fb + x + col;
+        for (int r = r_lo; r <= r_hi; r++) {
+            int a = acc[r] * 256 / (STROKE_SUB * SQ);
+            int py = y + r - STROKE_PAD;
+            acc[r] = 0;
+            if (py >= cy0 && py < cy1) {
+                blend_into(px + py * stride, ink, a > 256 ? 256 : a);
+            }
+        }
+    }
+#undef SAMPLE_T
+
+    draw_disc_aa(fb, x * SQ + SQ / 2 + s.span, y * SQ + hs->y[hs->n - 1], DOT_RADIUS, color);
+}
+
 /* The line through @p v. Under it either a gradient fill or, given
  * @p band_lo and @p band_hi (one per point of v), a band between them. */
 static void draw_sparkline(uint16_t *fb, int x, int y, int w, int h, const float *v, int n,
                            const float *band_lo, const float *band_hi, uint16_t line_color,
                            uint16_t fill_color, uint8_t fill_alpha)
 {
-    if (n < 2) {
+    if (n < 2 || n > LINE_W) {
         board_gfx_hline(fb, x, y + h / 2, w, page_col(COL_MUTED));
         return;
     }
@@ -207,59 +407,110 @@ static void draw_sparkline(uint16_t *fb, int x, int y, int w, int h, const float
         }
     }
 
-    /* While the page is sliding (x offset nonzero), fill every other column:
-     * motion hides the decimation completely, and the saved blends roughly
-     * double the transition frame rate's headroom. */
-    int col_step = (s_xoff != 0) ? 2 : 1;
+    /* Every value to a height once, here; the rest is whole numbers. The
+     * line's centre runs from row 1 for the highest value to row h for the
+     * lowest, so its 2 px sit on the chart's last two rows there. */
+    static int16_t line_y[LINE_W], band_top[APP_CHART_MAX], band_bot[APP_CHART_MAX];
+    float scale = (float)(h - 1) / range * SQ;
+    for (int i = 0; i < n; i++) {
+        line_y[i] = (int16_t)(h * SQ - (int)((v[i] - lo) * scale));
+    }
+    const heights_t line = {line_y, n, w};
+    heights_t top = {band_top, n, w}, bot = {band_bot, n, w};
+    if (band_lo && n <= APP_CHART_MAX) {
+        for (int i = 0; i < n; i++) {
+            band_top[i] = (int16_t)((h - 1) * SQ - (int)((band_hi[i] - lo) * scale));
+            band_bot[i] = (int16_t)(h * SQ - (int)((band_lo[i] - lo) * scale));
+        }
+    } else {
+        band_lo = NULL;
+    }
+
+    /* Columns and rows outside the clip window are skipped here rather than
+     * pixel by pixel: most of a page that is sliding in is not on screen. */
+    int cx0, cy0, cx1, cy1;
+    board_gfx_get_clip(&cx0, &cy0, &cx1, &cy1);
+    int y_end = y + h < cy1 ? y + h : cy1;
+
+    /* While the page is moving, fill every other column: motion hides the
+     * decimation completely, and the saved blends roughly double the
+     * transition frame rate's headroom. */
+    int col_step = (s_xoff != 0 || s_yoff != 0) ? 2 : 1;
+    rgb_t ink = unpack(fill_color);
+    int stride = board_display_width();
     for (int col = 0; col < w; col += col_step) {
+        if (x + col < cx0 || x + col >= cx1) {
+            continue;
+        }
+        uint16_t *px = fb + x + col;
         if (band_lo) {
-            int top = y + (h - 1) - (int)((at_column(band_hi, n, col, w) - lo) / range * (h - 1));
-            int bot = y + (h - 1) - (int)((at_column(band_lo, n, col, w) - lo) / range * (h - 1));
-            uint8_t a = (uint8_t)(BAND_ALPHA * s_alpha / 255);
-            for (int py = top; py <= bot; py++) {
-                board_gfx_blend_pixel(fb, x + col, py, fill_color, a);
+            /* The band's edges fall between rows: the rows they cut are
+             * blended by how much of each the band covers. */
+            int from = height_at(&top, col), to = height_at(&bot, col);
+            int a = BAND_ALPHA * s_alpha / 255; /* of 255, near enough of 256 */
+            for (int r = from / SQ; r <= (to - 1) / SQ; r++) {
+                int r_from = from > r * SQ ? from : r * SQ;
+                int r_to = to < (r + 1) * SQ ? to : (r + 1) * SQ;
+                if (y + r >= cy0 && y + r < cy1) {
+                    blend_into(px + (y + r) * stride, ink, a * (r_to - r_from) / SQ);
+                }
             }
             continue;
         }
-        float val = at_column(v, n, col, w);
-        int cy = y + (h - 1) - (int)(((val - lo) / range) * (float)(h - 1));
-
-        /* Gradient fill: line colour dissolving toward the bottom edge. */
-        int depth = (y + h) - cy;
-        for (int py = cy + 1; py < y + h; py++) {
-            uint32_t a = (uint32_t)fill_alpha * (uint32_t)((y + h) - py) / (uint32_t)depth;
-            /* Scale by page alpha so fades take the fill down with them. */
-            a = a * s_alpha / 255;
-            board_gfx_blend_pixel(fb, x + col, py, fill_color, (uint8_t)a);
+        /* Gradient fill, from the row the line's centre is in: the line's
+         * colour dissolving toward the bottom edge, scaled by page alpha so
+         * fades take the fill down with them. The opacity falls by the same
+         * amount each row: 8.8 fixed point. */
+        int cy = y + height_at(&line, col) / SQ;
+        int depth = (y + h) - cy + 1;
+        int fall = ((fill_alpha * s_alpha / 255) << 8) / depth;
+        for (int py = cy < cy0 ? cy0 : cy; py < y_end; py++) {
+            blend_into(px + py * stride, ink, (fall * ((y + h) - py)) >> 8);
         }
     }
 
-    /* The line itself: 2-px stroke over the fill. */
-    int px = -1, py = -1;
-    for (int i = 0; i < n; i++) {
-        int cx = x + (i * (w - 1)) / (n - 1);
-        int cy = y + (h - 1) - (int)(((v[i] - lo) / range) * (float)(h - 1));
-        if (px >= 0) {
-            board_gfx_line(fb, px, py, cx, cy, line_color);
-            board_gfx_line(fb, px, py + 1, cx, cy + 1, line_color);
-        }
-        px = cx;
-        py = cy;
-    }
-    board_gfx_fill_circle(fb, px, py, 3, line_color);
-
+    draw_stroke_aa(fb, x, y, &line, line_color);
 }
 
 /* A smooth line through the highs and lows of each swing, one value per
- * column of a chart @p w wide. */
+ * column of a chart @p w wide.
+ *
+ * Working it out is the dearest thing on a page -- a third of a frame --
+ * and it only changes when a price does, so the last two are kept: two,
+ * because a page change draws two coins every frame. */
+
 static const float *extremes_line(const ui_coin_t *c, int w)
 {
-    static float columns[BOARD_LCD_V_RES];
+    static struct {
+        uint32_t key;
+        int n;
+        float columns[LINE_W];
+    } kept[2];
+    static int oldest;
     static chart_pt_t pts[2 * APP_CHART_MAX + 1], swings[2 * APP_CHART_MAX + 1];
+
+    /* FNV-1a over the candles: any tick changes the newest close. */
+    uint32_t key = 2166136261u;
+    const float *series[] = {c->closes, c->highs, c->lows};
+    for (int k = 0; k < 3; k++) {
+        const uint8_t *p = (const uint8_t *)series[k];
+        for (size_t i = 0; i < sizeof(float) * (size_t)c->n_closes; i++) {
+            key = (key ^ p[i]) * 16777619u;
+        }
+    }
+    for (int k = 0; k < 2; k++) {
+        if (kept[k].n == c->n_closes && kept[k].key == key) {
+            return kept[k].columns;
+        }
+    }
+    int slot = oldest;
+    oldest ^= 1;
     int n = chart_extremes(c->closes, c->highs, c->lows, c->n_closes, pts);
     n = chart_swings(pts, n, CHART_MIN_SWING, swings);
-    chart_columns(swings, n, w, columns);
-    return columns;
+    chart_columns(swings, n, w > LINE_W ? LINE_W : w, kept[slot].columns);
+    kept[slot].key = key;
+    kept[slot].n = c->n_closes;
+    return kept[slot].columns;
 }
 
 /* ---- Public ------------------------------------------------------------- */
@@ -294,118 +545,156 @@ void ui_draw_status(uint16_t *fb, ui_net_status_t net, float pulse)
     board_gfx_fill_circle(fb, DOT_CX, DOT_CY, DOT_R, col);
 }
 
-void ui_draw_page(uint16_t *fb, const ui_coin_t *c, int x_off, uint8_t alpha)
-{
-    s_alpha = alpha;
-    s_xoff = x_off;
-    int m = MARGIN + x_off;
+/* Rows of the page, top to bottom: where each starts and the last ends. */
+static const int k_row_y[UI_PAGE_ROWS + 1] = {0, 60, 98, BOARD_LCD_H_RES};
 
-    /* Title line: symbol in white, price in the day's colour, same size. */
-    int pen = board_font_text(fb, m, TITLE_Y, c->label, &font_large, page_col(COL_TEXT));
+/* Make @p shift the draw state for row @p row. False if nothing of the row
+ * can show, so its drawing is skipped altogether. */
+static bool row_begin(const ui_shift_t *shift, int row)
+{
+    int cx0, cy0, cx1, cy1;
+    board_gfx_get_clip(&cx0, &cy0, &cx1, &cy1);
+    if (shift->alpha == 0 || shift->dx >= cx1 || shift->dx + board_display_width() <= cx0 ||
+        k_row_y[row] + shift->dy >= cy1 || k_row_y[row + 1] + shift->dy <= cy0) {
+        return false;
+    }
+    s_alpha = shift->alpha;
+    s_xoff = shift->dx;
+    s_yoff = shift->dy;
+    return true;
+}
+
+/* Title line: symbol in white, price in the day's colour, same size. */
+static void draw_title(uint16_t *fb, const ui_coin_t *c)
+{
+    int y = TITLE_Y + s_yoff;
+    int pen = board_font_text(fb, MARGIN + s_xoff, y, c->label, &font_large, page_col(COL_TEXT));
 
     if (c->last <= 0.0f) {
-        board_font_text(fb, pen + 14, TITLE_Y, "--", &font_large, page_col(COL_MUTED));
-    } else {
-        bool up_day = c->last >= c->open24h;
-        uint16_t day_col = c->stale ? COL_MUTED : (up_day ? COL_UP : COL_DOWN);
+        board_font_text(fb, pen + 14, y, "--", &font_large, page_col(COL_MUTED));
+        return;
+    }
+    bool up_day = c->last >= c->open24h;
+    uint16_t day_col = c->stale ? COL_MUTED : (up_day ? COL_UP : COL_DOWN);
 
-        /* Tick flash: pull the price toward white as a fresh sample lands,
-         * easing back to the trend colour over ~300 ms. */
-        uint16_t price_col = day_col;
-        if (c->flash > 0.0f && !c->stale) {
-            price_col = mix_col(day_col, COL_WHITE, (uint8_t)(c->flash * 180.0f));
-        }
-
-        char price[20];
-        fmt_price(c->last, price, sizeof(price));
-        board_font_text(fb, pen + 14, TITLE_Y, price, &font_large, page_col(price_col));
-
-        /* Left change group. Normally the exchange's rolling 24 h move; on
-         * the 1D chart range that would duplicate the right group, so it
-         * shows the last hour instead -- baseline is the previous hourly
-         * candle's close (the newest is the live price itself). Both groups
-         * always end at the same latest price the big number shows. */
-        float base = c->open24h;
-        const char *tag = "24H";
-        if (c->range == 0) {
-            /* True rolling hour from the 1m series; if that has not arrived
-             * yet, the previous hourly candle close approximates it rather
-             * than leaving the group blank. */
-            if (c->h1_base > 0.0f) {
-                base = c->h1_base;
-                tag = "1H";
-            } else if (c->n_closes >= 2) {
-                base = c->closes[c->n_closes - 2];
-                tag = "1H";
-            }
-        }
-        if (base > 0.0f) {
-            bool up_l = c->last >= base;
-            uint16_t left_col = c->stale ? COL_MUTED : (up_l ? COL_UP : COL_DOWN);
-
-            float pct = (c->last - base) / base * 100.0f;
-            char pct_str[16];
-            snprintf(pct_str, sizeof(pct_str), "%.2f%%", (double)fabsf(pct));
-
-            draw_triangle_aa(fb, m, CHANGE_Y + (up_l ? 7 : 8), 15, up_l, page_col(left_col));
-            int tx = board_font_text(fb, m + 24, CHANGE_Y, pct_str, &font_medium,
-                                     page_col(left_col));
-            board_font_text(fb, tx + 10, CHANGE_Y + 7, tag, &font_small, page_col(COL_MUTED));
-        }
-
-        /* Range change, right-aligned: measured against the active chart
-         * range's oldest close, labelled to match -- 1D, 7D or 30D. Long
-         * pressing the button cycles the range, and this group follows. */
-        if (c->n_closes >= 2 && c->closes[0] > 0.0f) {
-            static const app_range_t k_range_cfg[APP_NUM_RANGES] = APP_RANGES;
-            const char *tag = k_range_cfg[c->range].tag;
-
-            bool up_range = c->last >= c->closes[0];
-            uint16_t range_col = c->stale ? COL_MUTED : (up_range ? COL_UP : COL_DOWN);
-
-            float pctr = (c->last - c->closes[0]) / c->closes[0] * 100.0f;
-            char pct_str[16];
-            snprintf(pct_str, sizeof(pct_str), "%.2f%%", (double)fabsf(pctr));
-
-            int pct_w = board_font_text_width(pct_str, &font_medium);
-            int tag_w = board_font_text_width(tag, &font_small);
-            int right = x_off + board_display_width() - MARGIN;
-            int gx = right - tag_w - 10 - pct_w - 24;
-
-            draw_triangle_aa(fb, gx, CHANGE_Y + (up_range ? 7 : 8), 15, up_range,
-                             page_col(range_col));
-            int tx = board_font_text(fb, gx + 24, CHANGE_Y, pct_str, &font_medium,
-                                     page_col(range_col));
-            board_font_text(fb, tx + 10, CHANGE_Y + 7, tag, &font_small, page_col(COL_MUTED));
-        }
+    /* Tick flash: pull the price toward white as a fresh sample lands,
+     * easing back to the trend colour over ~300 ms. */
+    uint16_t price_col = day_col;
+    if (c->flash > 0.0f && !c->stale) {
+        price_col = mix_col(day_col, COL_WHITE, (uint8_t)(c->flash * 180.0f));
     }
 
-    /* Sparkline coloured by its own span: first stored close vs the newest. */
-    if (c->n_closes >= 2) {
-        bool up_week = c->closes[c->n_closes - 1] >= c->closes[0];
-        uint16_t line = c->stale ? COL_MUTED : (up_week ? COL_UP : COL_DOWN);
-        uint16_t fill = up_week ? mix_col(line, COL_WHITE, FILL_LIGHTEN) : COL_DOWN_FILL;
-        if (c->stale) {
-            fill = mix_col(COL_MUTED, COL_WHITE, FILL_LIGHTEN);
+    char price[20];
+    fmt_price(c->last, price, sizeof(price));
+    board_font_text(fb, pen + 14, y, price, &font_large, page_col(price_col));
+}
+
+/* One change group: arrow, percentage and what it is measured over, with
+ * its left edge at @p gx. */
+static void draw_change(uint16_t *fb, const ui_coin_t *c, int gx, float base, const char *tag)
+{
+    int y = CHANGE_Y + s_yoff;
+    bool up = c->last >= base;
+    uint16_t col = page_col(c->stale ? COL_MUTED : (up ? COL_UP : COL_DOWN));
+    char pct[16];
+    snprintf(pct, sizeof(pct), "%.2f%%", (double)fabsf((c->last - base) / base * 100.0f));
+
+    draw_triangle_aa(fb, gx, y + (up ? 7 : 8), 15, up, col);
+    int tx = board_font_text(fb, gx + 24, y, pct, &font_medium, col);
+    board_font_text(fb, tx + 10, y + 7, tag, &font_small, page_col(COL_MUTED));
+}
+
+static void draw_changes(uint16_t *fb, const ui_coin_t *c)
+{
+    /* Left change group. Normally the exchange's rolling 24 h move; on
+     * the 1D chart range that would duplicate the right group, so it
+     * shows the last hour instead -- baseline is the previous hourly
+     * candle's close (the newest is the live price itself). Both groups
+     * always end at the same latest price the big number shows. */
+    float base = c->open24h;
+    const char *tag = "24H";
+    if (c->range == 0) {
+        /* True rolling hour from the 1m series; if that has not arrived
+         * yet, the previous hourly candle close approximates it rather
+         * than leaving the group blank. */
+        if (c->h1_base > 0.0f) {
+            base = c->h1_base;
+            tag = "1H";
+        } else if (c->n_closes >= 2) {
+            base = c->closes[c->n_closes - 2];
+            tag = "1H";
         }
-        uint8_t fill_a = up_week ? FILL_ALPHA_TOP : FILL_ALPHA_TOP_DOWN;
-        const float *v = c->closes;
-        int n = c->n_closes;
-        if (c->chart == UI_CHART_HIGHS_LOWS) {
-            v = extremes_line(c, board_display_width() - 2 * MARGIN);
-            n = board_display_width() - 2 * MARGIN;
-        }
-        bool band = c->chart == UI_CHART_BAND;
-        draw_sparkline(fb, m, SPARK_Y, board_display_width() - 2 * MARGIN, SPARK_H, v, n,
-                       band ? c->lows : NULL, band ? c->highs : NULL, page_col(line),
-                       page_col(fill), fill_a);
-    } else {
-        board_gfx_hline(fb, m, SPARK_Y + SPARK_H / 2, board_display_width() - 2 * MARGIN,
-                        page_col(COL_GRID));
+    }
+    if (base > 0.0f) {
+        draw_change(fb, c, MARGIN + s_xoff, base, tag);
     }
 
+    /* Range change, right-aligned: measured against the active chart
+     * range's oldest close, labelled to match -- 1D, 7D or 30D. Long
+     * pressing the button cycles the range, and this group follows. */
+    if (c->n_closes >= 2 && c->closes[0] > 0.0f) {
+        static const app_range_t k_range_cfg[APP_NUM_RANGES] = APP_RANGES;
+        const char *range_tag = k_range_cfg[c->range].tag;
+
+        char pct[16];
+        snprintf(pct, sizeof(pct), "%.2f%%",
+                 (double)fabsf((c->last - c->closes[0]) / c->closes[0] * 100.0f));
+        int width = 24 + board_font_text_width(pct, &font_medium) + 10 +
+                    board_font_text_width(range_tag, &font_small);
+        draw_change(fb, c, s_xoff + board_display_width() - MARGIN - width, c->closes[0],
+                    range_tag);
+    }
+}
+
+static void draw_chart(uint16_t *fb, const ui_coin_t *c)
+{
+    int x = MARGIN + s_xoff, y = SPARK_Y + s_yoff;
+    int w = board_display_width() - 2 * MARGIN;
+    if (c->n_closes < 2) {
+        board_gfx_hline(fb, x, y + SPARK_H / 2, w, page_col(COL_GRID));
+        return;
+    }
+    /* Coloured by its own span: first stored close vs the newest. */
+    bool up = c->closes[c->n_closes - 1] >= c->closes[0];
+    uint16_t line = c->stale ? COL_MUTED : (up ? COL_UP : COL_DOWN);
+    uint16_t fill = up ? mix_col(line, COL_WHITE, FILL_LIGHTEN) : COL_DOWN_FILL;
+    if (c->stale) {
+        fill = mix_col(COL_MUTED, COL_WHITE, FILL_LIGHTEN);
+    }
+    const float *v = c->closes;
+    int n = c->n_closes;
+    if (c->chart == UI_CHART_HIGHS_LOWS) {
+        v = extremes_line(c, w);
+        n = w;
+    }
+    bool band = c->chart == UI_CHART_BAND;
+    draw_sparkline(fb, x, y, w, SPARK_H, v, n, band ? c->lows : NULL, band ? c->highs : NULL,
+                   page_col(line), page_col(fill), up ? FILL_ALPHA_TOP : FILL_ALPHA_TOP_DOWN);
+}
+
+void ui_draw_page_rows(uint16_t *fb, const ui_coin_t *c, const ui_shift_t rows[UI_PAGE_ROWS])
+{
+    if (row_begin(&rows[0], 0)) {
+        draw_title(fb, c);
+    }
+    if (c->last > 0.0f && row_begin(&rows[1], 1)) {
+        draw_changes(fb, c);
+    }
+    if (row_begin(&rows[2], 2)) {
+        draw_chart(fb, c);
+    }
     s_alpha = 255;
     s_xoff = 0;
+    s_yoff = 0;
+}
+
+void ui_draw_page(uint16_t *fb, const ui_coin_t *c, int x_off, uint8_t alpha)
+{
+    ui_shift_t rows[UI_PAGE_ROWS];
+    for (int i = 0; i < UI_PAGE_ROWS; i++) {
+        rows[i] = (ui_shift_t){.dx = (int16_t)x_off, .alpha = alpha};
+    }
+    ui_draw_page_rows(fb, c, rows);
 }
 
 static void draw_mask(uint16_t *fb, int x0, int y0, const uint8_t *mask, uint16_t color)

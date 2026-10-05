@@ -9,6 +9,8 @@
  *   ui_begin_frame(fb);                     // background
  *   ui_draw_page(fb, coin, x_off, alpha);   // page content, possibly two of
  *   ui_draw_status(fb, net);                // fixed chrome, never animated
+ *
+ * page_transition.c composes the frames of a page change from these.
  */
 #pragma once
 
@@ -56,11 +58,24 @@ void ui_begin_frame(uint16_t *fb);
 /**
  * @brief Draw one coin's page content.
  *
- * @param x_off horizontal shift in pixels (slide transitions)
+ * @param x_off horizontal shift in pixels
  * @param alpha 255 = fully present; lower values fade every element toward
- *              the background (fade transitions)
+ *              the background
  */
 void ui_draw_page(uint16_t *fb, const ui_coin_t *coin, int x_off, uint8_t alpha);
+
+/* A page is three rows -- the title, the change figures and the chart --
+ * and a transition may move and fade each on its own. */
+#define UI_PAGE_ROWS 3
+
+typedef struct {
+    int16_t dx, dy; /* shift in pixels */
+    uint8_t alpha;  /* as for ui_draw_page() */
+} ui_shift_t;
+
+/** ui_draw_page() with each row placed separately. Drawing honours the clip
+ * window of board_gfx_set_clip(), and rows that cannot show cost nothing. */
+void ui_draw_page_rows(uint16_t *fb, const ui_coin_t *coin, const ui_shift_t rows[UI_PAGE_ROWS]);
 
 /** Status dot, fixed top-right. Drawn solid regardless of transitions.
  * @p pulse (0..1) drives the disconnected state's slow breathe; pass 1 if

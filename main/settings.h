@@ -32,6 +32,12 @@ extern "C" {
 #define SET_FADE_MAX 100
 #define SET_TRANSITION_MIN_MS 200
 #define SET_TRANSITION_MAX_MS 3000
+/* How a page change moves ... */
+#define SET_MOVE_SLIDE 0   /* both pages travel together */
+#define SET_MOVE_COVER 1   /* the new page travels over the old one */
+#define SET_MOVE_CASCADE 2 /* a slide, the rows of the page leaving in turn */
+#define SET_MOVE_WIPE 3    /* neither page moves: an edge sweeps across */
+/* ... and how the pages fade as it does. */
 #define SET_STYLE_CROSSFADE 0
 #define SET_STYLE_DIP 1
 #define SET_CHART_CLOSE 0     /* a line through each candle's close */
@@ -68,8 +74,10 @@ typedef struct {
     bool usb_left;
 
     int brightness;
-    int transition_fade;  /* how far pages dim while changing, percent */
-    int transition_style; /* SET_STYLE_* */
+    int transition_move;      /* SET_MOVE_* */
+    bool transition_vertical; /* pages change up and down rather than sideways */
+    int transition_fade;      /* how far pages dim while changing, percent */
+    int transition_style;     /* SET_STYLE_* */
     int transition_ms;
     int range; /* chart range index */
     int chart_style; /* SET_CHART_* */

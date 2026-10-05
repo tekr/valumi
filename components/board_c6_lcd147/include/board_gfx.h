@@ -24,6 +24,18 @@ static inline uint16_t board_rgb565(uint8_t r, uint8_t g, uint8_t b)
     return (uint16_t)((c >> 8) | (c << 8)); /* panel wants big-endian */
 }
 
+/**
+ * @brief Confine drawing to a window; what falls outside it is dropped.
+ *
+ * Honoured by every primitive here and by board_font_text(), but not by
+ * board_gfx_clear(), the rotate blit or the shrink, which own whole frames.
+ * It stays set until reset, so reset it before anyone else draws.
+ */
+void board_gfx_set_clip(int x, int y, int w, int h);
+void board_gfx_reset_clip(void);
+/** The window in force, already cut to the screen: x0 <= x < x1, y0 <= y < y1. */
+void board_gfx_get_clip(int *x0, int *y0, int *x1, int *y1);
+
 /** Fill the whole framebuffer with one colour. */
 void board_gfx_clear(uint16_t *fb, uint16_t color);
 
@@ -44,6 +56,9 @@ void board_gfx_line(uint16_t *fb, int x0, int y0, int x1, int y1, uint16_t color
 
 /** Blend @p color over the existing pixel at opacity @p alpha (0-255). */
 void board_gfx_blend_pixel(uint16_t *fb, int x, int y, uint16_t color, uint8_t alpha);
+
+/** Darken a rectangle toward black: @p keep (0-255) of each pixel is left. */
+void board_gfx_dim_rect(uint16_t *fb, int x, int y, int w, int h, uint8_t keep);
 
 /** Filled circle centred on (cx, cy). */
 void board_gfx_fill_circle(uint16_t *fb, int cx, int cy, int r, uint16_t color);

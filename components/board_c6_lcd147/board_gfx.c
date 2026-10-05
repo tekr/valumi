@@ -1,6 +1,7 @@
 #include "board_gfx.h"
 
 #include <math.h>
+#include <stdbool.h>
 #include <string.h>
 
 /* Logical dimensions depend on the orientation chosen at display init, so
@@ -79,6 +80,45 @@ static const uint8_t s_font5x7[96][5] = {
 
 #define FONT_LAST_CHAR 0x5F
 
+/* The clip window; x1/y1 of 0 mean "the whole screen" so that nothing has to
+ * initialise it before the display's size is known. */
+static int s_cx0, s_cy0, s_cx1, s_cy1;
+
+void board_gfx_set_clip(int x, int y, int w, int h)
+{
+    int x1 = x + w, y1 = y + h;
+    s_cx0 = x < 0 ? 0 : x;
+    s_cy0 = y < 0 ? 0 : y;
+    s_cx1 = x1 > W ? W : x1;
+    s_cy1 = y1 > H ? H : y1;
+    if (s_cx1 <= s_cx0 || s_cy1 <= s_cy0) {
+        /* Empty: a window nothing can fall inside, not "the whole screen". */
+        s_cx0 = s_cy0 = 0;
+        s_cx1 = s_cy1 = -1;
+    }
+}
+
+void board_gfx_reset_clip(void)
+{
+    s_cx0 = s_cy0 = s_cx1 = s_cy1 = 0;
+}
+
+void board_gfx_get_clip(int *x0, int *y0, int *x1, int *y1)
+{
+    *x0 = s_cx0;
+    *y0 = s_cy0;
+    *x1 = s_cx1 == 0 ? W : (s_cx1 < 0 ? 0 : s_cx1);
+    *y1 = s_cy1 == 0 ? H : (s_cy1 < 0 ? 0 : s_cy1);
+}
+
+static inline bool clipped(int x, int y)
+{
+    if ((unsigned)x >= W || (unsigned)y >= H) {
+        return true;
+    }
+    return s_cx1 != 0 && (x < s_cx0 || x >= s_cx1 || y < s_cy0 || y >= s_cy1);
+}
+
 void board_gfx_clear(uint16_t *fb, uint16_t color)
 {
     /* memset only helps when both bytes match; otherwise fall back to a loop
@@ -94,7 +134,7 @@ void board_gfx_clear(uint16_t *fb, uint16_t color)
 
 void board_gfx_pixel(uint16_t *fb, int x, int y, uint16_t color)
 {
-    if ((unsigned)x >= W || (unsigned)y >= H) {
+    if (clipped(x, y)) {
         return;
     }
     fb[y * W + x] = color;
@@ -105,12 +145,14 @@ void board_gfx_fill_rect(uint16_t *fb, int x, int y, int w, int h, uint16_t colo
     if (w <= 0 || h <= 0) {
         return;
     }
-    /* Clip against the screen rather than rejecting; partially visible shapes
-     * are the common case for anything moving. */
-    int x0 = x < 0 ? 0 : x;
-    int y0 = y < 0 ? 0 : y;
-    int x1 = x + w > W ? W : x + w;
-    int y1 = y + h > H ? H : y + h;
+    /* Clip rather than reject; partially visible shapes are the common case
+     * for anything moving. */
+    int cx0, cy0, cx1, cy1;
+    board_gfx_get_clip(&cx0, &cy0, &cx1, &cy1);
+    int x0 = x < cx0 ? cx0 : x;
+    int y0 = y < cy0 ? cy0 : y;
+    int x1 = x + w > cx1 ? cx1 : x + w;
+    int y1 = y + h > cy1 ? cy1 : y + h;
     if (x0 >= x1 || y0 >= y1) {
         return;
     }
@@ -119,6 +161,32 @@ void board_gfx_fill_rect(uint16_t *fb, int x, int y, int w, int h, uint16_t colo
         uint16_t *p = fb + row * W + x0;
         for (int col = x0; col < x1; col++) {
             *p++ = color;
+        }
+    }
+}
+
+void board_gfx_dim_rect(uint16_t *fb, int x, int y, int w, int h, uint8_t keep)
+{
+    int cx0, cy0, cx1, cy1;
+    board_gfx_get_clip(&cx0, &cy0, &cx1, &cy1);
+    int x0 = x < cx0 ? cx0 : x;
+    int y0 = y < cy0 ? cy0 : y;
+    int x1 = x + w > cx1 ? cx1 : x + w;
+    int y1 = y + h > cy1 ? cy1 : y + h;
+    int k = keep + (keep >> 7); /* of 256, so the scaling is a shift */
+    int stride = W;
+
+    for (int row = y0; row < y1; row++) {
+        uint16_t *p = fb + row * stride + x0;
+        for (int col = x0; col < x1; col++, p++) {
+            /* Stored big-endian for the panel: see board_rgb565(). */
+            uint16_t c = (uint16_t)((*p >> 8) | (*p << 8));
+            if (c == 0) {
+                continue;
+            }
+            uint16_t out = (uint16_t)(((((c >> 11) & 0x1F) * k >> 8) << 11) |
+                                      ((((c >> 5) & 0x3F) * k >> 8) << 5) | ((c & 0x1F) * k >> 8));
+            *p = (uint16_t)((out >> 8) | (out << 8));
         }
     }
 }
@@ -153,9 +221,6 @@ void board_gfx_fill_circle(uint16_t *fb, int cx, int cy, int r, uint16_t color)
      * same result for a filled disc. */
     for (int dy = -r; dy <= r; dy++) {
         int y = cy + dy;
-        if ((unsigned)y >= H) {
-            continue;
-        }
         int dx = 0;
         while (dx * dx + dy * dy <= r * r) {
             dx++;
@@ -167,7 +232,7 @@ void board_gfx_fill_circle(uint16_t *fb, int cx, int cy, int r, uint16_t color)
 
 void board_gfx_blend_pixel(uint16_t *fb, int x, int y, uint16_t color, uint8_t alpha)
 {
-    if ((unsigned)x >= W || (unsigned)y >= H) {
+    if (clipped(x, y)) {
         return;
     }
     if (alpha == 0) {
@@ -180,16 +245,16 @@ void board_gfx_blend_pixel(uint16_t *fb, int x, int y, uint16_t color, uint8_t a
     }
 
     /* Pixels are stored byte-swapped (panel wire order): unswap, lerp each
-     * channel, reswap. */
+     * channel, reswap. Opacity out of 256 rather than 255, so the lerp is a
+     * shift: this is the inner loop of everything that fades. */
     uint16_t bg = (uint16_t)((*p >> 8) | (*p << 8));
     uint16_t fg = (uint16_t)((color >> 8) | (color << 8));
+    int a = alpha + (alpha >> 7);
 
-    uint32_t br = (bg >> 11) & 0x1F, bgc = (bg >> 5) & 0x3F, bb = bg & 0x1F;
-    uint32_t fr = (fg >> 11) & 0x1F, fgc = (fg >> 5) & 0x3F, fbl = fg & 0x1F;
-
-    uint32_t r = (fr * alpha + br * (255 - alpha)) / 255;
-    uint32_t g = (fgc * alpha + bgc * (255 - alpha)) / 255;
-    uint32_t b = (fbl * alpha + bb * (255 - alpha)) / 255;
+    int r = (bg >> 11) & 0x1F, g = (bg >> 5) & 0x3F, b = bg & 0x1F;
+    r += ((int)((fg >> 11) & 0x1F) - r) * a >> 8;
+    g += ((int)((fg >> 5) & 0x3F) - g) * a >> 8;
+    b += ((int)(fg & 0x1F) - b) * a >> 8;
 
     uint16_t out = (uint16_t)((r << 11) | (g << 5) | b);
     *p = (uint16_t)((out >> 8) | (out << 8));

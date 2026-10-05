@@ -10,7 +10,7 @@ A mini scrolling crypto price ticker for the Waveshare 1.47" ESP32-C6 boards.
 <br/>
 <br/>
 <p align="center">
-  <img src="docs/img/transitions.webp" width="240" alt="valumi gliding from BTC to ETH to SOL">
+  <img src="docs/img/transitions.webp" width="240" alt="valumi cascading from BTC to ETH to LINK">
 </p>
 
 ## Features
@@ -33,8 +33,9 @@ A mini scrolling crypto price ticker for the Waveshare 1.47" ESP32-C6 boards.
 </table>
 <br/>
 
-- **Transitions**: crossfade or dip, 0.2-3s, with adjustable fade. Time per
-  coin from 0s (a continuous scroll) to 15s.
+- **Buttery-smooth transitions** at 50-60 frames a second: slide, cover,
+  cascade or wipe, each sideways or up and down, 0.2-3s, with adjustable
+  fade. Time per coin from 0s (a continuous scroll) to 15s.
 - **Brightness** and **night dimming** on a schedule, with a time zone.
 - **Touch board extras**: swipe to change coin, rest a finger to hold one,
   and the accelerometer keeps the picturebupright, turning it with a short
@@ -219,8 +220,9 @@ lives in `components/board_c6_lcd147/board_lcd_jd9853.c`. Full pin map:
 
 ## How it works
 
-- `main.c` -- the render task: screen, button, touch, transitions,
-  orientation, and the setup/login screens.
+- `main.c` -- the render task: screen, button, touch, orientation, and the
+  setup/login screens. `page_transition.c` draws the frames of a page
+  change.
 - `market.c` -- the network task: prices and charts from OKX over a single
   HTTP/2 connection. Only the coin on screen is polled, plus the next one just
   before it arrives; charts fill the gaps one request at a time.

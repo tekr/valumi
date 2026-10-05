@@ -22,6 +22,8 @@ void settings_defaults(settings_t *s)
     s->brightness = APP_BRIGHTNESS_DEFAULT;
     s->transition_fade = APP_TRANSITION_FADE;
     s->transition_style = SET_STYLE_CROSSFADE;
+    s->transition_move = SET_MOVE_SLIDE;
+    s->transition_vertical = false;
     s->chart_style = SET_CHART_CLOSE;
     s->transition_ms = APP_TRANSITION_MS;
     s->range = APP_DEFAULT_RANGE;
@@ -240,6 +242,10 @@ bool settings_validate(const settings_t *s, char *err, size_t en)
     }
     if (s->transition_style != SET_STYLE_CROSSFADE && s->transition_style != SET_STYLE_DIP) {
         snprintf(err, en, "unknown transition style");
+        return false;
+    }
+    if (s->transition_move < SET_MOVE_SLIDE || s->transition_move > SET_MOVE_WIPE) {
+        snprintf(err, en, "unknown transition");
         return false;
     }
     if (s->chart_style < SET_CHART_CLOSE || s->chart_style > SET_CHART_BAND) {

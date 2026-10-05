@@ -16,6 +16,7 @@ idf_component_register(
         "market_core.c"
         "memwatch.c"
         "okx_client.c"
+        "page_transition.c"
         "screens.c"
         "settings.c"
         "settings_json.c"

@@ -112,6 +112,8 @@ static void add_ip(cJSON *o, const char *key, uint32_t ip, bool present)
     cJSON_AddStringToObject(o, key, buf);
 }
 
+/* Indexed by SET_MOVE_*. */
+static const char *const k_moves[] = {"slide", "cover", "cascade", "wipe"};
 /* Indexed by SET_CHART_*. */
 static const char *const k_chart_styles[] = {"close", "highs_lows", "band"};
 
@@ -140,6 +142,9 @@ cJSON *settings_to_json(const settings_t *s)
     cJSON_AddBoolToObject(o, "usb_left", s->usb_left);
 
     cJSON_AddNumberToObject(root, "brightness", s->brightness);
+    cJSON_AddStringToObject(root, "transition", k_moves[s->transition_move]);
+    cJSON_AddStringToObject(root, "transition_direction",
+                            s->transition_vertical ? "vertical" : "horizontal");
     cJSON_AddNumberToObject(root, "transition_fade", s->transition_fade);
     cJSON_AddNumberToObject(root, "transition_ms", s->transition_ms);
     cJSON_AddStringToObject(root, "transition_style",
@@ -315,7 +320,7 @@ static bool apply_live_fields(settings_t *work, const cJSON *j, bool import, cha
                                        "brightness",      "transition_fade", "transition_ms",
                                        "transition_style", "range",        "chart_style",
                                        "night",           "tz_offset_min", "networks",
-                                       NULL};
+                                       "transition",      "transition_direction", NULL};
     if (!want_object(j, keys, "settings", err, en)) {
         return false;
     }
@@ -358,6 +363,28 @@ static bool apply_live_fields(settings_t *work, const cJSON *j, bool import, cha
             work->transition_style = SET_STYLE_DIP;
         } else {
             snprintf(err, en, "transition style must be \"crossfade\" or \"dip\"");
+            return false;
+        }
+    }
+    if ((it = cJSON_GetObjectItemCaseSensitive(j, "transition"))) {
+        int k = SET_MOVE_WIPE;
+        while (k >= 0 && !(cJSON_IsString(it) && strcmp(it->valuestring, k_moves[k]) == 0)) {
+            k--;
+        }
+        if (k < 0) {
+            snprintf(err, en,
+                     "transition must be \"slide\", \"cover\", \"cascade\" or \"wipe\"");
+            return false;
+        }
+        work->transition_move = k;
+    }
+    if ((it = cJSON_GetObjectItemCaseSensitive(j, "transition_direction"))) {
+        if (cJSON_IsString(it) && strcmp(it->valuestring, "horizontal") == 0) {
+            work->transition_vertical = false;
+        } else if (cJSON_IsString(it) && strcmp(it->valuestring, "vertical") == 0) {
+            work->transition_vertical = true;
+        } else {
+            snprintf(err, en, "transition direction must be \"horizontal\" or \"vertical\"");
             return false;
         }
     }

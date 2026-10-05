@@ -39,7 +39,7 @@ AUTH_LOCKOUT_S = 30        # auth_core.h: AUTH_LOCKOUT_US
 # "networks" is deliberately not in this list (see the module docstring /
 # README: we never touch Wi-Fi). There is no device name any more.
 LIVE_FIELDS = ("coins", "dwell_s", "orientation", "brightness", "transition_fade",
-              "transition_style", "transition_ms", "range", "chart_style", "night",
+              "transition_style", "transition_ms", "transition", "transition_direction", "range", "chart_style", "night",
               "tz_offset_min")
 
 DEFAULT_TIMEOUT = 12.0

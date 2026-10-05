@@ -119,9 +119,11 @@ from `app_config.h`. **Live** = applied without a reboot.
 | Timezone | UTC+8 | yes | stored as minutes (UTC+8 = 480); no automatic daylight saving |
 | Default chart range | 7D | yes | the button still cycles it |
 | Chart style | closes | yes | closes (one point per candle) / highs & lows (each candle's extremes -- low then high for a candle that closed up, high then low otherwise -- keeping only swings over 4% of the chart's height, drawn as a monotone cubic that never overshoots a point) / close + range (the close line over a band from each low to its high) |
-| Transition style | crossfade | yes | crossfade / dip |
+| Transition | slide | yes | slide (both pages move together) / cover (the new page moves in over the old one, which drifts and dims) / cascade (a slide, the title, the change figures and the chart leaving in turn) / wipe (neither page moves; an edge sweeps across) |
+| Transition direction | horizontal | yes | horizontal / vertical; applies to every transition |
 | Transition time | 680 ms | yes | 200-3000 ms |
-| Transition fade depth | 100% | yes | 0-100%, how far a page dims while changing |
+| Fade style | crossfade | yes | crossfade / dip; slide and cascade only |
+| Fade depth | 100% | yes | 0-100%, how far a page dims while changing; for cover, how far the covered page dims; unused by wipe |
 | Panel password | generated | n/a | see below -- never set through this API |
 
 Stored Wi-Fi passwords are write-only: the API never returns them; the page

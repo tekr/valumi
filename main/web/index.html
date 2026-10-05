@@ -751,14 +751,28 @@ function DisplayCard(){
     { min: L.dwell_min, max: L.dwell_max }, (v) => v + "s", save,
     "After the coin has slid in. 0 s scrolls continuously."));
 
-  card.appendChild(Choice("Transition", "transition_style", SET.transition_style,
+  /* The fade settings only show for the transitions that use them. */
+  const fadeStyle = Choice("Fade", "transition_style", SET.transition_style,
     [["crossfade", "Crossfade"], ["dip", "Dip"]], save,
-    "Crossfade: pages fade across each other. Dip: out to background, then in."));
-
+    "Crossfade: pages fade across each other. Dip: out to background, then in.");
+  const fadeDepth = Slider("Fade between coins", "transition_fade", SET.transition_fade,
+    { min: 0, max: L.fade_max }, (v) => v + "%", save, "How far a page dims as it changes. 0% is no fade.");
+  const showFades = () => {
+    fadeStyle.classList.toggle("hidden", SET.transition === "cover" || SET.transition === "wipe");
+    fadeDepth.classList.toggle("hidden", SET.transition === "wipe");
+  };
+  card.appendChild(Choice("Transition", "transition", SET.transition,
+    [["slide", "Slide"], ["cover", "Cover"], ["cascade", "Cascade"], ["wipe", "Wipe"]],
+    async (body, savedEl) => { await save(body, savedEl); showFades(); },
+    "Slide: both pages move together. Cover: the new page moves in over the old one. " +
+    "Cascade: a slide, one row of the page after another. Wipe: an edge sweeps across."));
+  card.appendChild(Choice("Direction", "transition_direction", SET.transition_direction,
+    [["horizontal", "Sideways"], ["vertical", "Up and down"]], save));
   card.appendChild(Slider("Transition time", "transition_ms", SET.transition_ms,
     { min: L.transition_min_ms, max: L.transition_max_ms, step: 20 }, (v) => (v / 1000).toFixed(2) + "s", save));
-  card.appendChild(Slider("Fade between coins", "transition_fade", SET.transition_fade,
-    { min: 0, max: L.fade_max }, (v) => v + "%", save, "0% is a plain slide."));
+  card.appendChild(fadeStyle);
+  card.appendChild(fadeDepth);
+  showFades();
 
   card.appendChild(Choice("Chart range", "range", SET.range,
     SET.range_names.map((name, i) => [i, name]), save));

@@ -166,6 +166,29 @@ static void test_transition_fade(void)
     CHECK_EQ_INT(apply(&s, "{\"transition_style\":\"wipe\"}", err), -1);
     CHECK_EQ_INT(apply(&s, "{\"transition_style\":1}", err), -1);
 
+    /* What moves: a slide by default, and sideways. */
+    fresh(&s);
+    CHECK_EQ_INT(s.transition_move, SET_MOVE_SLIDE);
+    CHECK(!s.transition_vertical);
+    CHECK(apply(&s, "{\"transition\":\"cover\"}", err) > 0);
+    CHECK_EQ_INT(s.transition_move, SET_MOVE_COVER);
+    CHECK(apply(&s, "{\"transition\":\"cascade\"}", err) > 0);
+    CHECK_EQ_INT(s.transition_move, SET_MOVE_CASCADE);
+    CHECK(apply(&s, "{\"transition\":\"wipe\",\"transition_direction\":\"vertical\"}", err) > 0);
+    CHECK_EQ_INT(s.transition_move, SET_MOVE_WIPE);
+    CHECK(s.transition_vertical);
+    j = settings_to_json(&s);
+    CHECK_EQ_STR(cJSON_GetStringValue(cJSON_GetObjectItem(j, "transition")), "wipe");
+    CHECK_EQ_STR(cJSON_GetStringValue(cJSON_GetObjectItem(j, "transition_direction")), "vertical");
+    cJSON_Delete(j);
+    CHECK(apply(&s, "{\"transition\":\"slide\",\"transition_direction\":\"horizontal\"}", err) > 0);
+    CHECK_EQ_INT(s.transition_move, SET_MOVE_SLIDE);
+    CHECK(!s.transition_vertical);
+    CHECK_EQ_INT(apply(&s, "{\"transition\":\"flip\"}", err), -1);
+    CHECK_EQ_INT(apply(&s, "{\"transition\":2}", err), -1);
+    CHECK_EQ_INT(apply(&s, "{\"transition_direction\":\"diagonal\"}", err), -1);
+    CHECK_EQ_INT(apply(&s, "{\"transition_direction\":true}", err), -1);
+
     /* Chart: closes by default, as before; highs and lows, or a band. */
     fresh(&s);
     CHECK_EQ_INT(s.chart_style, SET_CHART_CLOSE);
@@ -587,6 +610,7 @@ static void test_stored_round_trip(void)
                      err) > 0);
     CHECK(apply(&a, "{\"dwell_s\":0,\"chart_style\":\"band\",\"coins\":[{\"inst_id\":\"ETH-USDT\"}]}",
                 err) > 0);
+    CHECK(apply(&a, "{\"transition\":\"cascade\",\"transition_direction\":\"vertical\"}", err) > 0);
     strcpy(a.panel_pw, "K7RM3");
     cJSON *j = settings_to_stored_json(&a);
     fresh(&b);

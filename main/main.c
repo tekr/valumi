@@ -43,6 +43,7 @@
 #include "market.h"
 #include "mdns.h"
 #include "nvs_flash.h"
+#include "page_transition.h"
 #include "screens.h"
 #include "settings_store.h"
 #include "ui.h"
@@ -88,7 +89,7 @@ static float ease_in_out(float t)
 typedef struct {
     bool active;
     int from, to;   /* page indices */
-    int dir;        /* +1: the new page enters from the right, -1: from the left */
+    int dir;        /* +1: the new page enters from the right or below, -1: the other way */
     int64_t t0_us;
 } transition_t;
 
@@ -99,41 +100,18 @@ static int s_shown_page;
  * direction and appear to move the wrong way. */
 static int s_pending_dir;
 
-/* One frame of the slide: pages glide on an ease-out while dimming by the
- * owner's transition_fade. Returns false when finished. */
+/* One frame of the page change. Returns false when it has finished. */
 static bool render_transition(uint16_t *fb, const ui_coin_t *coins)
 {
     float p = (float)(esp_timer_get_time() - s_tr.t0_us) / (s_cfg.transition_ms * 1000.0f);
     if (p >= 1.0f) {
         return false;
     }
-    int w = board_display_width();
-    /* Position: quadratic-warped start into a cubic settle. A quartic tail
-     * goes sub-pixel with ~15% of the duration left, so the page visibly
-     * parks early; this keeps the final ~20 px crawling at 1-5 px per frame
-     * over the last third, which the eye can see decelerate. */
-    float pw = p * p * (2.0f - p);
-    float uw = 1.0f - pw;
-    float pos = 1.0f - uw * uw * uw;
-    int dx = (int)(pos * (float)w);
-    /* Finish the crossfade by 75% so the landing happens on a solid page. */
-    float mp = p / 0.75f;
-    float mix = ease_in_out(mp > 1.0f ? 1.0f : mp);
-    /* CROSSFADE: the old page fades as the new one appears, so even at 100%
-     * the screen is never empty. DIP: out over the first half, in over the
-     * second, so at 100% there is a moment of bare background. */
-    float depth = (float)s_cfg.transition_fade / SET_FADE_MAX;
-    float out_dim = mix, in_dim = 1.0f - mix;
-    if (s_cfg.transition_style == SET_STYLE_DIP) {
-        out_dim = fminf(mix * 2.0f, 1.0f);
-        in_dim = fminf((1.0f - mix) * 2.0f, 1.0f);
-    }
-    ui_begin_frame(fb);
-    /* Mirroring the offsets is the whole of "swipe the other way". */
-    ui_draw_page(fb, &coins[s_tr.from], -dx * s_tr.dir,
-                 (uint8_t)((1.0f - depth * out_dim) * 255.0f));
-    ui_draw_page(fb, &coins[s_tr.to], (w - dx) * s_tr.dir,
-                 (uint8_t)((1.0f - depth * in_dim) * 255.0f));
+    const page_transition_t t = {.move = s_cfg.transition_move,
+                                 .vertical = s_cfg.transition_vertical,
+                                 .style = s_cfg.transition_style,
+                                 .fade = s_cfg.transition_fade};
+    page_transition_render(fb, &t, &coins[s_tr.from], &coins[s_tr.to], p, s_tr.dir);
     return true;
 }
 
