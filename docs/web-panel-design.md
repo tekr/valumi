@@ -1,6 +1,6 @@
 # valumi: web control panel
 
-Status: shipped, release 1.1. Targets both 1.47" C6 boards (4 MB plain,
+Status: shipped, release 1.2. Targets both 1.47" C6 boards (4 MB plain,
 8 MB touch) from one binary.
 
 ## Goals
