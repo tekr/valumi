@@ -4,26 +4,14 @@
     <img alt="valumi" src="docs/logo-light.png" width="180">
   </picture>
 </p>
+<br/>
+A mini scrolling crypto price ticker for the Waveshare 1.47" ESP32-C6 boards.
 
-A tiny crypto price desk ticker for the Waveshare 1.47" ESP32-C6 boards.
-
-
+<br/>
+<br/>
 <p align="center">
   <img src="docs/img/transitions.webp" width="240" alt="valumi gliding from BTC to ETH to SOL">
 </p>
-
-
-Native C on ESP-IDF, drawing to the panel through `esp_lcd` with its own
-render loop.
-
-
-<table align="center">
-  <tr>
-    <td align="center"><img src="docs/img/chart-closes.png" width="203" alt="BTC, 7-day chart of closing prices"><br><sub>Closes</sub></td>
-    <td align="center"><img src="docs/img/chart-highs-lows.png" width="203" alt="ETH, 1-day chart through the highs and lows"><br><sub>Highs &amp; lows</sub></td>
-    <td align="center"><img src="docs/img/chart-band.png" width="203" alt="SOL, 30-day closes over a low-high band"><br><sub>Close + range</sub></td>
-  </tr>
-</table>
 
 ## Features
 
@@ -34,6 +22,17 @@ render loop.
   each candle's close; a smooth line through the real highs and lows of each
   swing; or the close line over a band from each candle's low to its high.
   The right edge always ends at the live price.
+
+<br/>
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/img/chart-closes.png" width="203" alt="BTC, 7-day chart of closing prices"><br><sub>Closes</sub></td>
+    <td align="center"><img src="docs/img/chart-highs-lows.png" width="203" alt="ETH, 1-day chart through the highs and lows"><br><sub>Highs &amp; lows</sub></td>
+    <td align="center"><img src="docs/img/chart-band.png" width="203" alt="SOL, 30-day closes over a low-high band"><br><sub>Close + range</sub></td>
+  </tr>
+</table>
+<br/>
+
 - **Transitions**: crossfade or dip, 0.2-3s, with adjustable fade. Time per
   coin from 0s (a continuous scroll) to 15s.
 - **Brightness** and **night dimming** on a schedule, with a time zone.
