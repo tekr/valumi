@@ -225,18 +225,16 @@ lives in `components/board_c6_lcd147/board_lcd_jd9853.c`. Full pin map:
   HTTP/2 connection. Only the coin on screen is polled, plus the next one just
   before it arrives; charts fill the gaps one request at a time.
   `market_core.c` holds its pure logic, tested on the host.
-- `web_panel.c` and `web/index.html` -- the panel: one self-contained page,
+- `web_panel.c` and `web/index.html` -- the panel: a self-contained page,
   gzipped into the firmware, and a small JSON API.
 - `wifi_mgr.c` -- networks in preference order, and the setup hotspot with
   its captive portal.
-- `settings*.c` -- settings, validated and stored in NVS as JSON read field by
-  field, so they survive firmware updates that add or drop settings.
-- `firmware.c` -- updates boot on probation: a new image confirms itself once
-  the panel has been reachable for 60 s, or before any restart from the panel,
-  and the bootloader rolls back one that never does.
+- `settings*.c` -- settings, stored in NVS as JSON. Robust to firmware updates
+  that add/remove fields.
+- `firmware.c` -- over-the-air updates will be rolled back if the panel is not
+  reachable for 60s after boot (unless manually restarted during that period).
 
-RAM (512KB) is in somewhat short supply, with 110 KB needed for the
-framebuffer alone. The display runs single-buffered by necessity; exchange
+The display runs single-buffered by necessity due to limited RAM. Exchange
 responses are buffered only while being handled; TLS uses mbedTLS's dynamic
 buffers. The panel's status shows a warning if free memory has ever dropped
 below 10 KB.
