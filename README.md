@@ -8,7 +8,7 @@
 A tiny crypto price desk ticker for the Waveshare 1.47" ESP32-C6 boards.
 
 <p align="center">
-  <img src="docs/img/transitions.webp" width="320" alt="valumi gliding from BTC to ETH to SOL">
+  <img src="docs/img/transitions.webp" width="240" alt="valumi gliding from BTC to ETH to SOL">
 </p>
 
 Native C on ESP-IDF, drawing to the panel through `esp_lcd` with its own
@@ -16,9 +16,9 @@ render loop.
 
 <table align="center">
   <tr>
-    <td align="center"><img src="docs/img/chart-closes.png" width="270" alt="BTC, 7-day chart of closing prices"><br><sub>Closes</sub></td>
-    <td align="center"><img src="docs/img/chart-highs-lows.png" width="270" alt="ETH, 1-day chart through the highs and lows"><br><sub>Highs &amp; lows</sub></td>
-    <td align="center"><img src="docs/img/chart-band.png" width="270" alt="SOL, 30-day closes over a low-high band"><br><sub>Close + range</sub></td>
+    <td align="center"><img src="docs/img/chart-closes.png" width="203" alt="BTC, 7-day chart of closing prices"><br><sub>Closes</sub></td>
+    <td align="center"><img src="docs/img/chart-highs-lows.png" width="203" alt="ETH, 1-day chart through the highs and lows"><br><sub>Highs &amp; lows</sub></td>
+    <td align="center"><img src="docs/img/chart-band.png" width="203" alt="SOL, 30-day closes over a low-high band"><br><sub>Close + range</sub></td>
   </tr>
 </table>
 
@@ -80,8 +80,8 @@ shows its address and panel password for a few seconds.
 
 <table align="center">
   <tr>
-    <td align="center"><img src="docs/img/splash.png" width="300" alt="Splash screen with the valumi logo"><br><sub>Starting up</sub></td>
-    <td align="center"><img src="docs/img/setup.png" width="300" alt="Setup screen: QR code to join the ticker's hotspot"><br><sub>Setup: scan to join its hotspot</sub></td>
+    <td align="center"><img src="docs/img/splash.png" width="225" alt="Splash screen with the valumi logo"><br><sub>Starting up</sub></td>
+    <td align="center"><img src="docs/img/setup.png" width="225" alt="Setup screen: QR code to join the ticker's hotspot"><br><sub>Setup: scan to join its hotspot</sub></td>
   </tr>
 </table>
 
