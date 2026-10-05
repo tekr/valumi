@@ -105,8 +105,9 @@ hotspot comes back up as well.
 <br/>
 <table align="center">
   <tr>
-    <td align="center"><img src="docs/img/panel-coins.png" width="260" alt="Web panel: status and coin list"></td>
-    <td align="center"><img src="docs/img/panel-display.png" width="260" alt="Web panel: display settings"></td>
+    <td align="center"><img src="docs/img/panel-coins.png" width="240" alt="Web panel: status and coin list"></td>
+    <td align="center"><img src="docs/img/panel-display.png" width="240" alt="Web panel: transition settings"></td>
+    <td align="center"><img src="docs/img/panel-display-2.png" width="240" alt="Web panel: chart, orientation, brightness and time zone settings"></td>
   </tr>
 </table>
 <br/>
