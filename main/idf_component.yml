@@ -1,0 +1,5 @@
+dependencies:
+  # <name>.local on the network, so nobody needs the IP address.
+  espressif/mdns: "^1.4.0"
+  # QR codes on the setup and login screens (Nayuki's qrcodegen).
+  espressif/qrcode: "^0.1.0"

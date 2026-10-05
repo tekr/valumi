@@ -1,0 +1,13 @@
+# Two app slots for over-the-air updates, with rollback: a new image runs on
+# probation until it has brought the web panel up, and the bootloader returns
+# to the previous one if it never does.
+#
+# Sized for the SMALLER board (4 MB). The same image runs on the 8 MB board,
+# whose upper half goes unused.
+#
+# Name,   Type, SubType, Offset,   Size
+nvs,      data, nvs,     0x9000,   0x6000
+otadata,  data, ota,     0xf000,   0x2000
+phy_init, data, phy,     0x11000,  0x1000
+ota_0,    app,  ota_0,   0x20000,  0x1E0000
+ota_1,    app,  ota_1,   0x200000, 0x1E0000

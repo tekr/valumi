@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>valumi</title>
+<style>
+:root{
+  --bg:#0c0e11; --card:#15181c; --card2:#1b1f24; --line:#272c32;
+  --text:#e9e6df; --dim:#8b9099; --dim2:#5c6169;
+  --accent:#c99a4d; --good:#5cb583; --bad:#d97a68;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;}
+body{font-size:15px;line-height:1.45;padding-bottom:60px;}
+.wrap{max-width:600px;margin:0 auto;padding:0 16px;}
+a{color:var(--accent);}
+h1,h2,h3{margin:0;font-weight:600;}
+.dim{color:var(--dim);}
+.hidden{display:none!important;}
+.topbar{display:flex;align-items:center;gap:10px;padding:16px 16px 10px;max-width:600px;margin:0 auto;
+  justify-content:space-between;}
+.logo{display:block;height:36px;}
+.iconbtn{background:none;border:1px solid var(--line);color:var(--dim);border-radius:6px;
+  padding:5px 9px;font-size:12px;cursor:pointer;font-family:var(--sans);}
+.iconbtn:hover{color:var(--text);border-color:var(--dim2);}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;
+  padding:16px 16px 18px;margin:0 0 14px;}
+.card h2{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);
+  margin-bottom:12px;}
+.card h2 span.bar{display:inline-block;width:22px;height:2px;background:var(--accent);
+  margin-right:8px;vertical-align:middle;border-radius:1px;}
+.sub{font-size:12.5px;color:var(--dim);margin:4px 0 10px;}
+
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:12.5px;color:var(--dim);margin-bottom:5px;}
+input[type=text],input[type=password],input[type=time],select{
+  width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+  border-radius:6px;padding:9px 10px;font-size:15px;font-family:var(--sans);}
+input:focus,select:focus{outline:none;border-color:var(--accent);}
+.range{flex:1;padding:0 12px;touch-action:pan-y;outline:none;}
+.range-in{position:relative;height:44px;}
+.range-track{position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:2px;background:var(--line);}
+.range-fill{display:block;height:100%;border-radius:2px;background:var(--accent);}
+.range-thumb{position:absolute;top:50%;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;
+  background:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:grab;transition:transform .1s;}
+.range.active .range-thumb{transform:scale(1.2);cursor:grabbing;}
+.range:focus-visible .range-thumb{outline:2px solid var(--text);outline-offset:2px;}
+.range.disabled{opacity:.4;}
+.range.disabled .range-thumb{cursor:default;}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;
+  vertical-align:middle;}
+.mono{font-family:var(--mono);}
+.row{display:flex;align-items:center;gap:8px;}
+.row.between{justify-content:space-between;}
+.row.wrap{flex-wrap:wrap;}
+.stack{display:flex;flex-direction:column;gap:8px;}
+.grow{flex:1;min-width:0;}
+.small{font-size:12.5px;}
+.mt{margin-top:10px;}
+.ipgrid input{width:auto;flex:1 1 120px;}
+
+.btn{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:6px;
+  padding:9px 14px;font-size:14px;cursor:pointer;font-family:var(--sans);}
+.btn:hover{border-color:var(--dim2);}
+.btn:disabled{opacity:.4;cursor:default;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#1a1206;font-weight:600;}
+.btn.primary:hover{filter:brightness(1.08);}
+.btn.ghost{border-color:transparent;color:var(--dim);padding:6px 8px;}
+.btn.tiny{padding:4px 8px;font-size:12px;border-radius:5px;}
+
+.list-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);}
+.list-row:last-child{border-bottom:none;}
+.coin-row{align-items:center;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+.coin-row.dragging{position:relative;z-index:1;background:var(--card);box-shadow:0 6px 18px rgba(0,0,0,.45);}
+.grip{color:var(--dim);cursor:grab;padding:0 2px;font-size:16px;line-height:1;}
+.reorder{display:flex;flex-direction:column;gap:2px;}
+.reorder button{background:none;border:none;color:var(--dim);cursor:pointer;padding:1px 4px;
+  font-size:11px;line-height:1;}
+.reorder button:disabled{opacity:.25;cursor:default;}
+.reorder button:not(:disabled):hover{color:var(--text);}
+
+.msg{font-size:13px;border-radius:6px;padding:8px 10px;margin-top:8px;}
+.msg.err{background:#241614;color:var(--bad);border:1px solid #45241f;}
+.msg.warn{background:#231d10;color:var(--accent);border:1px solid #4a3a1e;}
+.msg.ok{background:#132118;color:var(--good);border:1px solid #1f3d2c;}
+.saved{font-size:12px;color:var(--good);opacity:0;transition:opacity .2s;}
+.saved.show{opacity:1;}
+
+.toast{position:fixed;left:0;right:0;top:0;z-index:50;padding:10px 16px;text-align:center;
+  font-size:13.5px;background:#241614;color:var(--bad);border-bottom:1px solid #45241f;}
+.toast.warn{background:#231d10;color:var(--accent);border-color:#4a3a1e;}
+.toast .x{position:absolute;right:12px;top:8px;cursor:pointer;color:inherit;opacity:.7;
+  background:none;border:none;font-size:16px;}
+
+.spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;flex:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.bars{display:inline-flex;align-items:flex-end;gap:1.5px;height:11px;flex:none;}
+.bars i{display:block;width:3px;background:var(--dim2);border-radius:1px;}
+.bars i.on{background:var(--accent);}
+.bars i:nth-child(1){height:3px}.bars i:nth-child(2){height:6px}
+.bars i:nth-child(3){height:9px}.bars i:nth-child(4){height:11px}
+
+.lock{opacity:.6;flex:none;}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:70vh;text-align:center;padding:20px;}
+.center h1{font-size:19px;margin-bottom:4px;}
+.center p{color:var(--dim);font-size:13.5px;max-width:320px;}
+
+.step{border-left:2px solid var(--line);padding-left:14px;margin-bottom:18px;position:relative;}
+.step .num{position:absolute;left:-10px;top:-1px;width:18px;height:18px;border-radius:50%;
+  background:var(--card2);border:1px solid var(--line);color:var(--dim);font-size:11px;
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);}
+
+.progress{height:6px;background:var(--card2);border-radius:3px;overflow:hidden;margin-top:8px;}
+.progress b{display:block;height:100%;background:var(--accent);width:0%;transition:width .2s;}
+
+table.stat{width:100%;border-collapse:collapse;font-size:13.5px;}
+table.stat td{padding:4px 0;border-bottom:1px solid var(--line);}
+table.stat tr:last-child td{border-bottom:none;}
+table.stat td.k{color:var(--dim);width:44%;}
+table.stat td.v{font-family:var(--mono);text-align:right;}
+
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.seg button{flex:1;background:var(--card2);border:none;color:var(--dim);padding:8px 4px;
+  font-size:13px;cursor:pointer;font-family:var(--sans);border-right:1px solid var(--line);}
+.seg button:last-child{border-right:none;}
+.seg button.on{background:var(--accent);color:#1a1206;font-weight:600;}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div class="topbar">
+  <img class="logo" src="/logo.png" alt="valumi">
+  <button class="iconbtn hidden" id="logoutBtn">Log out</button>
+</div>
+<div id="app"></div>
+<script>
+"use strict";
+
+/* ---------- tiny DOM + fetch helpers -------------------------------------- */
+
+function E(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    const v = attrs[k];
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v; /* only ever a fixed local constant */
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, "");
+    else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()){
+    if (kid == null) continue;
+    n.appendChild(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return n;
+}
+const $ = (sel, root) => (root || document).querySelector(sel);
+
+let onSessionLost = null; // set by boot(); called once on a 401 while logged in
+
+async function api(path, opts){
+  opts = opts || {};
+  opts.credentials = "same-origin";
+  let res;
+  try { res = await fetch(path, opts); }
+  catch (e) { throw new Error("could not reach the ticker"); }
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (res.status === 401 && ST && ST.logged_in){
+    ST.logged_in = false;
+    if (onSessionLost) onSessionLost();
+  }
+  if (!res.ok) throw new Error((data && data.error) || (res.status + " " + res.statusText));
+  return data;
+}
+const apiJson = (path, method, body) => api(path, {
+  method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}),
+});
+
+function toast(msg, cls){
+  const box = $("#toast");
+  box.innerHTML = "";
+  const el = E("div", { class: "toast" + (cls ? " " + cls : "") },
+    E("button", { class: "x", onclick: () => box.innerHTML = "" }, "×"));
+  el.insertBefore(document.createTextNode(msg), el.firstChild);
+  box.appendChild(el);
+}
+function flash(el, text, ok){
+  el.textContent = text;
+  el.className = "msg " + (ok ? "ok" : "err");
+  if (ok) setTimeout(() => el.classList.add("hidden"), 2500);
+}
+function savedTick(el){
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 1600);
+}
+
+function fmtOffset(min){
+  const sign = min < 0 ? "-" : "+", a = Math.abs(min);
+  return "UTC" + sign + String(Math.floor(a / 60)).padStart(2, "0") + ":" +
+    String(a % 60).padStart(2, "0");
+}
+function tzMinutes(){
+  const extra = [-570, -210, 210, 270, 330, 345, 390, 525, 570, 630, 765];
+  const set = new Set(extra);
+  for (let h = -12; h <= 14; h++) set.add(h * 60);
+  return [...set].sort((a, b) => a - b);
+}
+const fmtBytes = (n) => n >= 1024 ? (n / 1024).toFixed(1) + " KB" : n + " B";
+function rssiBars(rssi){
+  return rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -75 ? 2 : rssi >= -85 ? 1 : 0;
+}
+function Bars(rssi){
+  const n = rssiBars(rssi), b = E("span", { class: "bars" });
+  for (let i = 1; i <= 4; i++) b.appendChild(E("i", { class: i <= n ? "on" : "" }));
+  return b;
+}
+const LOCK_SVG = '<svg width="11" height="13" viewBox="0 0 11 13" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+  '<rect x="1" y="5.5" width="9" height="6.5" rx="1" stroke="currentColor"/>' +
+  '<path d="M3 5.5V3.5A2.5 2.5 0 0 1 8 3.5V5.5" stroke="currentColor"/></svg>';
+const Lock = () => E("span", { class: "lock", html: LOCK_SVG });
+const Spinner = () => E("span", { class: "spin" });
+
+/* ---------- global state -------------------------------------------------- */
+
+let ST = null;      // /api/state
+let SET = null;     // /api/settings (cached, refreshed after each save)
+let qrExpired = false;
+let sessionLost = false;
+let pollGen = 0;    // bumped on every render, to stop the previous status poller
+
+
+function setTop(){
+  const lo = $("#logoutBtn");
+  lo.classList.toggle("hidden", !(ST && ST.logged_in && ST.mode !== "setup"));
+  lo.onclick = async () => { try { await apiJson("/api/logout", "POST", {}); } catch (e) {} location.reload(); };
+}
+
+function handleSessionLost(){
+  sessionLost = true;
+  setTop();
+  render();
+}
+
+async function boot(){
+  const app = $("#app");
+  app.innerHTML = "";
+  app.appendChild(E("div", { class: "center" }, Spinner(), E("p", null, "Loading…")));
+  if (location.search.includes("qr=expired")){
+    qrExpired = true;
+    history.replaceState(null, "", location.pathname);
+  }
+  onSessionLost = handleSessionLost;
+  try { ST = await api("/api/state"); }
+  catch (e){
+    app.innerHTML = "";
+    app.appendChild(E("div", { class: "center" }, E("h1", null, "Can't reach the ticker"), E("p", null, e.message)));
+    return;
+  }
+  setTop();
+  render();
+}
+
+function render(){
+  pollGen++;
+  const app = $("#app");
+  app.innerHTML = "";
+  const wrap = E("div", { class: "wrap" });
+  app.appendChild(wrap);
+  if (!ST.logged_in){ wrap.appendChild(LoginView()); return; }
+  loadPanel(wrap);
+}
+
+async function loadPanel(wrap){
+  try { SET = await api("/api/settings"); }
+  catch (e){ toast(e.message); return; }
+  if (ST.mode === "setup") wrap.appendChild(SetupWizard());
+  wrap.appendChild(StatusCard());
+  wrap.appendChild(CoinsCard());
+  wrap.appendChild(DisplayCard());
+  if (ST.mode !== "setup") wrap.appendChild(WifiCard());
+  wrap.appendChild(DeviceCard());
+}
+
+/* ---------- login ---------------------------------------------------------- */
+
+function LoginView(){
+  const box = E("div", { class: "center" });
+  if (sessionLost){
+    box.appendChild(E("div", { class: "msg warn", style: "text-align:left" },
+      "Your session ended — please log in again."));
+  }
+  if (qrExpired){
+    box.appendChild(E("div", { class: "msg warn", style: "text-align:left" },
+      "That login code has expired — hold the ticker's button for 5 seconds to get " +
+      "a new one, or log in with the password."));
+  }
+  box.appendChild(E("h1", null, "Log in"));
+  const err = E("div", { class: "msg err hidden" });
+  const pw = E("input", { type: "password", placeholder: "Panel password", autocomplete: "current-password" });
+  const btn = E("button", { class: "btn primary", style: "width:100%;margin-top:10px" }, "Log in");
+  box.appendChild(E("form", { class: "stack", style: "width:100%;max-width:280px;margin-top:14px",
+    onsubmit: async (ev) => {
+      ev.preventDefault();
+      btn.disabled = true; btn.textContent = "Logging in…";
+      try {
+        await apiJson("/api/login", "POST", { password: pw.value });
+        sessionLost = false; qrExpired = false;
+        ST = await api("/api/state"); setTop(); render();
+      } catch (e){
+        flash(err, e.message, false);
+        btn.disabled = false; btn.textContent = "Log in";
+      }
+    } }, pw, btn, err));
+  box.appendChild(E("p", { class: "mt" },
+    "Log in with the password shown on the ticker (hold its button for 5 seconds to show it), " +
+    "or scan the code on that screen."));
+  return box;
+}
+
+/* ---------- shared Wi-Fi network editor (setup wizard + Wi-Fi card) -------- */
+
+const CONFIRM_APPLY = "Applying will disconnect the ticker. It will restart and show its new address on its screen.";
+
+function pwToggleField(attrs){
+  const input = E("input", Object.assign({ type: "password" }, attrs));
+  const toggle = E("button", { type: "button", class: "btn ghost tiny",
+    onclick: () => {
+      input.type = input.type === "password" ? "text" : "password";
+      toggle.textContent = input.type === "password" ? "Show" : "Hide";
+    } }, "Show");
+  return E("div", { class: "row" }, E("span", { class: "grow" }, input), toggle);
+}
+function ipFields(n){
+  return E("div", { class: "row wrap mt ipgrid" },
+    E("input", { type: "text", placeholder: "IP e.g. 192.168.1.20", value: n.ip || "", oninput: (ev) => n.ip = ev.target.value }),
+    E("input", { type: "text", placeholder: "Mask e.g. 255.255.255.0", value: n.mask || "", oninput: (ev) => n.mask = ev.target.value }),
+    E("input", { type: "text", placeholder: "Gateway", value: n.gateway || "", oninput: (ev) => n.gateway = ev.target.value }),
+    E("input", { type: "text", placeholder: "DNS (optional)", value: n.dns || "", oninput: (ev) => n.dns = ev.target.value }));
+}
+function netRow(n, i, nets, rerender){
+  const placeholder = n.isNew ? "Password (blank = open network)" :
+    n.has_password ? "Leave blank to keep the saved password" : "Password (blank = open network)";
+  return E("div", { class: "list-row" },
+    E("div", { class: "reorder" },
+      E("button", { disabled: i === 0, onclick: () => { [nets[i-1], nets[i]] = [nets[i], nets[i-1]]; rerender(); } }, "▲"),
+      E("button", { disabled: i === nets.length - 1, onclick: () => { [nets[i+1], nets[i]] = [nets[i], nets[i+1]]; rerender(); } }, "▼")),
+    E("div", { class: "grow stack" },
+      E("div", { class: "row" }, E("b", null, n.ssid),
+        (n.isNew ? n.secure !== false : n.has_password) ? Lock() : E("span", { class: "small dim" }, "open")),
+      pwToggleField({ placeholder, value: n.pw, oninput: (ev) => n.pw = ev.target.value }),
+      E("label", { class: "small dim" },
+        E("input", { type: "checkbox", checked: n.static_ip || false,
+          onchange: (ev) => { n.static_ip = ev.target.checked; rerender(); } }), " Static IP"),
+      n.static_ip ? ipFields(n) : null),
+    E("button", { class: "btn ghost", onclick: () => { nets.splice(i, 1); rerender(); } }, "✕"));
+}
+function paintNetList(list, nets, rerender){
+  list.innerHTML = "";
+  nets.forEach((n, i) => list.appendChild(netRow(n, i, nets, rerender)));
+  if (!nets.length) list.appendChild(E("p", { class: "small dim" }, "No networks added yet."));
+}
+function ScanWidget(nets, rerender, title){
+  const box = E("div", { class: "stack mt" });
+  let scanning = false, scanned = [];
+  function paint(){
+    box.innerHTML = "";
+    box.appendChild(E("div", { class: "row between" },
+      E("h3", { class: "small dim", style: "font-weight:600" }, title),
+      scanning ? Spinner() : E("button", { class: "btn tiny", onclick: () => doScan(true) }, "Rescan")));
+    scanned.filter((s) => !nets.some((n) => n.ssid === s.ssid)).forEach((s) => {
+      box.appendChild(E("div", { class: "list-row" }, Bars(s.rssi), E("span", { class: "grow" }, s.ssid),
+        s.secure ? Lock() : null,
+        E("button", { class: "btn tiny", disabled: nets.length >= SET.limits.max_nets, onclick: () => {
+          nets.push({ ssid: s.ssid, isNew: true, secure: s.secure, pw: "", static_ip: false });
+          rerender();
+        } }, "Add")));
+    });
+    if (!scanning && !scanned.length) box.appendChild(E("p", { class: "small dim" }, "No scan yet."));
+  }
+  async function doScan(fresh){
+    scanning = true; paint();
+    try { scanned = (await api("/api/scan" + (fresh ? "?fresh=1" : ""))).networks || []; }
+    catch (e){ toast(e.message); }
+    scanning = false; paint();
+  }
+  paint(); doScan(false);
+  return box;
+}
+function ManualAddRow(nets, rerender){
+  const input = E("input", { type: "text", placeholder: "Network name (SSID)", maxlength: SET.limits.ssid_max });
+  const open = E("input", { type: "checkbox" });
+  return E("div", { class: "stack mt" },
+    E("div", { class: "row" }, input,
+      E("button", { class: "btn small", onclick: () => {
+        const v = input.value.trim();
+        if (!v) return;
+        if (nets.length >= SET.limits.max_nets){ toast("At most " + SET.limits.max_nets + " networks."); return; }
+        if (nets.some((n) => n.ssid === v)){ toast("'" + v + "' is already in the list."); return; }
+        nets.push({ ssid: v, isNew: true, secure: !open.checked, pw: "", static_ip: false });
+        rerender(); input.value = ""; open.checked = false;
+      } }, "Add")),
+    E("label", { class: "small dim" }, open, " open network (no password)"));
+}
+function validateNets(nets){
+  if (!nets.length) return "Add at least one network.";
+  for (const n of nets){
+    if (n.isNew && n.secure !== false && !n.pw) return "enter the password for " + n.ssid + ", or pick an open network";
+    const L = SET.limits;
+    if (n.pw && (n.pw.length < L.wifi_pw_min || n.pw.length > L.wifi_pw_max))
+      return "'" + n.ssid + "': password must be " + L.wifi_pw_min + "-" + L.wifi_pw_max + " characters.";
+    if (n.static_ip && (!n.ip || !n.mask || !n.gateway)) return "'" + n.ssid + "': static IP needs an address, mask and gateway.";
+  }
+  return null;
+}
+function netsPayload(nets){
+  return nets.map((n) => {
+    const e = { ssid: n.ssid, static_ip: !!n.static_ip, ip: n.ip || "", mask: n.mask || "", gateway: n.gateway || "", dns: n.dns || "" };
+    if (n.pw) e.password = n.pw;
+    else if (n.isNew || !n.has_password) e.password = "";
+    else e.keep_password = true;
+    return e;
+  });
+}
+function showRestartNotice(card, title, msg){
+  card.innerHTML = "";
+  card.appendChild(E("h2", null, E("span", { class: "bar" }), title));
+  card.appendChild(E("p", null, msg ||
+    ("The ticker is restarting onto your network. Check its screen for the new address, or try http://" +
+      ST.hostname + ".local shortly.")));
+}
+
+/* ---------- setup wizard ----------------------------------------------------- */
+
+function SetupWizard(){
+  const card = E("div", { class: "card" },
+    E("h2", null, E("span", { class: "bar" }), "Set up your ticker"),
+    E("p", { class: "sub" },
+      "Add the Wi-Fi network(s) the ticker should join, then save. The ticker will restart onto your network."));
+
+  const nets = (SET.networks || []).map((n) => ({ ...n, isNew: false, pw: "" }));
+  const list = E("div", { class: "stack" });
+  const rerender = () => paintNetList(list, nets, rerender);
+  rerender();
+  const scan = ScanWidget(nets, rerender, "Nearby networks");
+  const manual = ManualAddRow(nets, rerender);
+
+  const err = E("div", { class: "msg err hidden" });
+  const saveBtn = E("button", { class: "btn primary", style: "width:100%" }, "Save & restart");
+
+  card.appendChild(E("div", { class: "sub" }, "Networks (first = most preferred)"));
+  card.appendChild(list);
+  card.appendChild(scan);
+  card.appendChild(manual);
+  card.appendChild(err);
+  card.appendChild(E("div", { class: "mt" }, saveBtn));
+
+  saveBtn.onclick = async () => {
+    const verr = validateNets(nets);
+    if (verr){ flash(err, verr, false); return; }
+    if (!confirm(CONFIRM_APPLY)) return;
+    saveBtn.disabled = true; saveBtn.textContent = "Saving…";
+    try {
+      await apiJson("/api/wifi", "POST", { networks: netsPayload(nets) });
+      showRestartNotice(card, "Saved",
+        "Saved. The ticker is restarting and joining your Wi-Fi. Its screen will show its address " +
+        "and a password for this panel — or open http://" + ST.hostname + ".local.");
+    } catch (e){
+      flash(err, e.message, false);
+      saveBtn.disabled = false; saveBtn.textContent = "Save & restart";
+    }
+  };
+  return card;
+}
+
+/* ---------- status card ------------------------------------------------------ */
+
+function StatusCard(){
+  const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Status"));
+  const body = E("div", null, Spinner());
+  card.appendChild(body);
+  let iv = null;
+  const myGen = pollGen;
+
+  async function refresh(){
+    if (myGen !== pollGen){ if (iv){ clearInterval(iv); iv = null; } return; }
+    let s;
+    try { s = await api("/api/status"); } catch (e){ return; }
+    if (myGen !== pollGen){ if (iv){ clearInterval(iv); iv = null; } return; }
+    body.innerHTML = "";
+    const w = s.wifi, sys = s.system;
+    body.appendChild(E("table", { class: "stat" },
+      E("tr", null, E("td", { class: "k" }, "Wi-Fi"), E("td", { class: "v" }, w.mode === "setup" ? "hotspot" : w.mode)),
+      w.ssid ? E("tr", null, E("td", { class: "k" }, "Network"),
+        E("td", { class: "v" }, E("span", { class: "row", style: "justify-content:flex-end" }, w.ssid, Bars(w.rssi)))) : null,
+      w.ip ? E("tr", null, E("td", { class: "k" }, "Address"), E("td", { class: "v" }, w.ip)) : null,
+      E("tr", null, E("td", { class: "k" }, "Version"), E("td", { class: "v" }, sys.version)),
+      // Memory only when it has actually run short: the lowest free heap
+      // since boot under 10 KB. Healthy tickers sit far above that.
+      sys.heap_min_free < 10240 ? E("tr", null, E("td", { class: "k" }, "Low memory"),
+        E("td", { class: "v" }, fmtBytes(sys.heap_min_free) + " free at lowest")) : null));
+    if (s.clock_synced === false) body.appendChild(E("div", { class: "msg warn" }, "Clock not synced yet — prices may be stale."));
+  }
+  refresh();
+  new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (e.isIntersecting && !iv){ refresh(); iv = setInterval(refresh, 5000); }
+    else if (!e.isIntersecting && iv){ clearInterval(iv); iv = null; }
+  })).observe(card);
+  return card;
+}
+
+/* ---------- coins card -------------------------------------------------------- */
+
+function CoinsCard(){
+  const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Coins"));
+  const L = SET.limits;
+  let coins = SET.coins.map((c) => ({ inst_id: c.inst_id, label: c.label }));
+  const list = E("div", { class: "stack" });
+  const err = E("div", { class: "msg err hidden" });
+
+  /* Every change saves at once, one save at a time and in order. A refused
+     save (a coin the exchange does not list, say) puts the list back as it was. */
+  let queue = Promise.resolve();
+  function commit(next){
+    queue = queue.then(async () => {
+      err.classList.add("hidden");
+      try {
+        const r = await apiJson("/api/settings", "PUT", { coins: next });
+        SET = r.settings;
+        (r.warnings || []).forEach((w) => toast(w, "warn"));
+        return true;
+      } catch (e){
+        flash(err, e.message, false);
+        return false;
+      } finally {
+        coins = SET.coins.map((c) => ({ inst_id: c.inst_id, label: c.label }));
+        renderList();
+      }
+    });
+    return queue;
+  }
+
+  function renderList(){
+    list.innerHTML = "";
+    coins.forEach((c, i) => {
+      const label = E("input", { type: "text", maxlength: L.label_max, value: c.label,
+        style: "width:64px;text-align:center;text-transform:uppercase",
+        oninput: (ev) => { ev.target.value = ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); c.label = ev.target.value; },
+        onchange: () => commit(coins) });
+      const row = E("div", { class: "list-row coin-row" },
+        E("span", { class: "grip", title: "Hold and drag to reorder" }, "⠿"),
+        E("span", { class: "grow mono" }, c.inst_id), label,
+        E("button", { class: "btn ghost", disabled: coins.length <= 1,
+          onclick: () => commit(coins.filter((_, k) => k !== i)) }, "✕"));
+      draggable(row, i);
+      list.appendChild(row);
+    });
+  }
+
+  /* Reorder by dragging a row. With a mouse the drag starts at once; on a
+     touch screen only after the finger has rested ~0.4 s, so an ordinary
+     swipe still scrolls the page. */
+  function draggable(row, index){
+    let hold = null, drag = null, x0 = 0, y0 = 0;
+    const begin = (ev) => {
+      drag = { at: index, from: index, y: ev.clientY };
+      row.classList.add("dragging");
+      row.setPointerCapture(ev.pointerId);
+      if (navigator.vibrate) navigator.vibrate(15);
+    };
+    const end = () => {
+      clearTimeout(hold); hold = null;
+      if (!drag) return;
+      row.classList.remove("dragging");
+      row.style.transform = "";
+      const d = drag; drag = null;
+      if (d.at !== d.from){
+        const next = coins.slice();
+        next.splice(d.at, 0, next.splice(d.from, 1)[0]);
+        commit(next);
+      }
+    };
+    row.addEventListener("pointerdown", (ev) => {
+      if (ev.target.closest("button, input")) return;
+      x0 = ev.clientX; y0 = ev.clientY;
+      if (ev.pointerType === "mouse"){ ev.preventDefault(); begin(ev); }
+      else hold = setTimeout(() => begin(ev), 400);
+    });
+    row.addEventListener("pointermove", (ev) => {
+      if (!drag){
+        if (hold && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8){ clearTimeout(hold); hold = null; }
+        return;
+      }
+      /* Past half a neighbour's height, trade places with it. */
+      let dy = ev.clientY - drag.y;
+      const next = row.nextElementSibling, prev = row.previousElementSibling;
+      if (next && dy > (next.offsetTop - row.offsetTop) / 2){
+        drag.y += next.offsetTop - row.offsetTop;
+        list.insertBefore(next, row);
+        drag.at++;
+      } else if (prev && dy < (prev.offsetTop - row.offsetTop) / 2){
+        drag.y += prev.offsetTop - row.offsetTop;
+        list.insertBefore(row, prev);
+        drag.at--;
+      }
+      dy = ev.clientY - drag.y;
+      row.style.transform = "translateY(" + dy + "px)";
+    });
+    row.addEventListener("pointerup", end);
+    row.addEventListener("pointercancel", end);
+    /* Once a drag has begun, the finger moves the row, not the page. */
+    row.addEventListener("touchmove", (ev) => { if (drag) ev.preventDefault(); }, { passive: false });
+    row.addEventListener("contextmenu", (ev) => ev.preventDefault());
+  }
+  renderList();
+
+  const addId = E("input", { type: "text", placeholder: "BTC-USDT", maxlength: L.inst_max, style: "flex:1",
+    oninput: (ev) => ev.target.value = ev.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") });
+  const addBtn = E("button", { class: "btn small" }, "Add");
+  const add = async () => {
+    const id = addId.value.trim();
+    if (!id) return;
+    if (coins.length >= L.max_coins){ toast("Up to " + L.max_coins + " coins."); return; }
+    if (coins.some((c) => c.inst_id === id)){ toast(id + " is already in the list."); return; }
+    addBtn.disabled = true;
+    addBtn.textContent = ""; addBtn.appendChild(Spinner());
+    /* The ticker checks a new coin with OKX before saving it. */
+    if (await commit(coins.concat([{ inst_id: id }]))) addId.value = "";
+    addBtn.disabled = false; addBtn.textContent = "Add";
+  };
+  addBtn.onclick = add;
+  addId.addEventListener("keydown", (ev) => { if (ev.key === "Enter") add(); });
+
+  card.appendChild(list);
+  card.appendChild(E("div", { class: "row mt" }, addId, addBtn));
+  card.appendChild(err);
+  return card;
+}
+
+/* ---------- display card ------------------------------------------------------ */
+
+/* A setting with a few named values, as a row of buttons. */
+function Choice(label, key, value, options, save, hint){
+  const saved = E("span", { class: "saved" }, "Saved");
+  const seg = E("div", { class: "seg" });
+  options.forEach(([v, name]) => seg.appendChild(E("button", { class: v === value ? "on" : "",
+    onclick: (ev) => {
+      [...seg.children].forEach((b) => b.classList.toggle("on", b === ev.target));
+      save({ [key]: v }, saved);
+    } }, name)));
+  return E("div", { class: "field" }, E("label", null, label), seg,
+    hint ? E("div", { class: "small dim" }, hint) : null, saved);
+}
+
+/* A slider that moves only when its knob is dragged. A browser's own slider
+   jumps to wherever it is touched, so on a phone a scroll that happened to
+   start on one changed the setting; here a swipe anywhere else scrolls, and a
+   tap does nothing. o: { min, max, step, value, disabled, oninput, onchange }.
+   The element's value and disabled properties read and set it. */
+function Range(o){
+  const step = o.step || 1;
+  let value = o.value, disabled = !!o.disabled, drag = null;
+  const fill = E("span", { class: "range-fill" });
+  const thumb = E("span", { class: "range-thumb" });
+  const inner = E("div", { class: "range-in" }, E("span", { class: "range-track" }, fill), thumb);
+  const el = E("div", { class: "range", role: "slider", tabindex: 0,
+    "aria-valuemin": o.min, "aria-valuemax": o.max }, inner);
+  const frac = () => (value - o.min) / (o.max - o.min);
+  const paint = () => {
+    thumb.style.left = fill.style.width = frac() * 100 + "%";
+    el.setAttribute("aria-valuenow", value);
+    el.classList.toggle("disabled", disabled);
+  };
+  const set = (v) => {
+    v = Math.min(o.max, Math.max(o.min, o.min + Math.round((v - o.min) / step) * step));
+    if (v !== value){ value = v; paint(); if (o.oninput) o.oninput(v); }
+  };
+  el.addEventListener("pointerdown", (ev) => {
+    const r = inner.getBoundingClientRect();
+    /* Anywhere within a fingertip of the knob grabs it. */
+    if (disabled || Math.abs(ev.clientX - (r.left + frac() * r.width)) > 36) return;
+    drag = { x: ev.clientX, from: value, width: r.width };
+    el.setPointerCapture(ev.pointerId);
+    el.classList.add("active");
+    ev.preventDefault();
+  });
+  el.addEventListener("pointermove", (ev) => {
+    if (drag) set(drag.from + (ev.clientX - drag.x) / drag.width * (o.max - o.min));
+  });
+  const end = () => {
+    if (!drag) return;
+    const changed = value !== drag.from;
+    drag = null;
+    el.classList.remove("active");
+    if (changed && o.onchange) o.onchange(value);
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+  /* Once the knob is held, the finger moves it, not the page. */
+  el.addEventListener("touchmove", (ev) => { if (drag) ev.preventDefault(); }, { passive: false });
+  el.addEventListener("keydown", (ev) => {
+    const d = { ArrowLeft: -step, ArrowDown: -step, ArrowRight: step, ArrowUp: step }[ev.key];
+    if (!d || disabled) return;
+    ev.preventDefault();
+    const was = value;
+    set(value + d);
+    if (value !== was && o.onchange) o.onchange(value);
+  });
+  Object.defineProperty(el, "value", { get: () => value, set: (v) => { value = v; paint(); } });
+  Object.defineProperty(el, "disabled", { get: () => disabled, set: (d) => { disabled = d; paint(); } });
+  paint();
+  return el;
+}
+
+/* A setting slider: shows its value while moving, saves when let go. */
+function Slider(label, key, value, attrs, fmt, save, hint){
+  const shown = E("span", { class: "small mono" }, fmt(value));
+  const saved = E("span", { class: "saved" }, "Saved");
+  const range = Range(Object.assign({ value,
+    oninput: (v) => shown.textContent = fmt(v),
+    onchange: (v) => save({ [key]: v }, saved) }, attrs));
+  return E("div", { class: "field" }, E("label", null, label), E("div", { class: "row" }, range, shown),
+    hint ? E("div", { class: "small dim" }, hint) : null, saved);
+}
+
+function DisplayCard(){
+  const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Display"));
+  const err = E("div", { class: "msg err hidden" });
+  const L = SET.limits;
+
+  async function save(body, savedEl){
+    err.classList.add("hidden");
+    try {
+      const r = await apiJson("/api/settings", "PUT", body);
+      SET = r.settings;
+      (r.warnings || []).forEach((w) => toast(w, "warn"));
+      if (savedEl) savedTick(savedEl);
+    } catch (e){ flash(err, e.message, false); }
+  }
+
+  card.appendChild(Slider("Time per coin", "dwell_s", SET.dwell_s,
+    { min: L.dwell_min, max: L.dwell_max }, (v) => v + "s", save,
+    "After the coin has slid in. 0 s scrolls continuously."));
+
+  card.appendChild(Choice("Transition", "transition_style", SET.transition_style,
+    [["crossfade", "Crossfade"], ["dip", "Dip"]], save,
+    "Crossfade: pages fade across each other. Dip: out to background, then in."));
+
+  card.appendChild(Slider("Transition time", "transition_ms", SET.transition_ms,
+    { min: L.transition_min_ms, max: L.transition_max_ms, step: 20 }, (v) => (v / 1000).toFixed(2) + "s", save));
+  card.appendChild(Slider("Fade between coins", "transition_fade", SET.transition_fade,
+    { min: 0, max: L.fade_max }, (v) => v + "%", save, "0% is a plain slide."));
+
+  card.appendChild(Choice("Chart range", "range", SET.range,
+    SET.range_names.map((name, i) => [i, name]), save));
+  card.appendChild(Choice("Chart", "chart_style", SET.chart_style,
+    [["close", "Closes"], ["highs_lows", "Highs & lows"], ["band", "Close + range"]], save,
+    "Closes: one point per candle. Highs & lows: a smooth line through every real " +
+    "high and low, without the small wiggles. Close + range: the closing line over a " +
+    "band from each low to its high."));
+
+  const oriSaved = E("span", { class: "saved" }, "Saved");
+  const noSensor = !SET.orientation_sensor;
+  const fixedBox = E("input", { type: "checkbox", checked: SET.orientation.fixed || noSensor, disabled: noSensor });
+  const usbRight = E("input", { type: "radio", name: "usbside", checked: !SET.orientation.usb_left, disabled: !fixedBox.checked });
+  const usbLeft = E("input", { type: "radio", name: "usbside", checked: !!SET.orientation.usb_left, disabled: !fixedBox.checked });
+  const orientChanged = () => save({ orientation: noSensor ?
+    { usb_left: usbLeft.checked } : { fixed: fixedBox.checked, usb_left: usbLeft.checked } }, oriSaved);
+  fixedBox.onchange = () => { usbRight.disabled = usbLeft.disabled = !fixedBox.checked; orientChanged(); };
+  usbRight.onchange = orientChanged; usbLeft.onchange = orientChanged;
+  card.appendChild(E("div", { class: "field" },
+    E("label", { class: "row small", style: "font-weight:normal;margin:0 0 8px" }, fixedBox, " Fixed orientation"),
+    noSensor ? E("div", { class: "small dim" }, "No motion sensor on this board.") : null,
+    E("div", { class: "row wrap" },
+      E("label", { class: "row small" }, usbRight, " USB on right"),
+      E("label", { class: "row small" }, usbLeft, " USB on left")),
+    oriSaved));
+
+  const nightSaved = E("span", { class: "saved" }, "Saved");
+  const nOn = E("input", { type: "checkbox", checked: SET.night.on });
+  const nStart = E("input", { type: "time", value: SET.night.start, disabled: !SET.night.on });
+  const nEnd = E("input", { type: "time", value: SET.night.end, disabled: !SET.night.on });
+  const nBrVal = E("span", { class: "small mono" }, SET.night.brightness + "%");
+  const nBr = Range({ min: L.bright_min, max: L.bright_max, value: SET.night.brightness,
+    disabled: !SET.night.on, oninput: (v) => nBrVal.textContent = v + "%",
+    onchange: () => nightChanged() });
+  const nightPayload = () => ({ on: nOn.checked, start: nStart.value, end: nEnd.value, brightness: +nBr.value });
+  const nightChanged = () => save({ night: nightPayload() }, nightSaved);
+  nOn.onchange = () => { nStart.disabled = nEnd.disabled = nBr.disabled = !nOn.checked; nightChanged(); };
+  [nStart, nEnd].forEach((el) => el.onchange = nightChanged);
+  card.appendChild(Slider("Brightness", "brightness", SET.brightness,
+    { min: L.bright_min, max: L.bright_max }, (v) => v + "%", save));
+  card.appendChild(E("div", { class: "field" },
+    E("label", { class: "row small" }, nOn, " Dim at night"),
+    E("div", { class: "row wrap mt" },
+      E("div", { class: "stack" }, E("span", { class: "small dim" }, "From"), nStart),
+      E("div", { class: "stack" }, E("span", { class: "small dim" }, "Until"), nEnd)),
+    E("div", { class: "row mt" }, nBr, nBrVal), nightSaved));
+
+  const tzSaved = E("span", { class: "saved" }, "Saved");
+  const tzSel = E("select", { onchange: (ev) => save({ tz_offset_min: +ev.target.value }, tzSaved) });
+  tzMinutes().forEach((m) => tzSel.appendChild(E("option", { value: m, selected: m === SET.tz_offset_min }, fmtOffset(m))));
+  card.appendChild(E("div", { class: "field" }, E("label", null, "Time zone"), tzSel,
+    E("div", { class: "small dim", style: "margin-top:4px" }, "No automatic daylight saving."), tzSaved));
+
+  card.appendChild(err);
+  return card;
+}
+
+/* ---------- Wi-Fi networks card (already-saved networks) --------------------- */
+
+function WifiCard(){
+  const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Wi-Fi networks"));
+  const nets = SET.networks.map((n) => ({ ...n, isNew: false, pw: "" }));
+  const list = E("div", { class: "stack" });
+  const rerender = () => paintNetList(list, nets, rerender);
+  rerender();
+  const scan = ScanWidget(nets, rerender, "Add a network");
+  const manual = ManualAddRow(nets, rerender);
+  const err = E("div", { class: "msg err hidden" });
+  const applyBtn = E("button", { class: "btn primary" }, "Apply & restart");
+
+  applyBtn.onclick = async () => {
+    const verr = validateNets(nets);
+    if (verr){ flash(err, verr, false); return; }
+    if (!confirm(CONFIRM_APPLY)) return;
+    applyBtn.disabled = true;
+    try {
+      await apiJson("/api/wifi", "POST", { networks: netsPayload(nets) });
+      showRestartNotice(card, "Applied");
+    } catch (e){ flash(err, e.message, false); applyBtn.disabled = false; }
+  };
+
+  card.appendChild(list);
+  card.appendChild(scan);
+  card.appendChild(manual);
+  card.appendChild(err);
+  card.appendChild(E("div", { class: "mt" }, applyBtn));
+  return card;
+}
+
+/* ---------- device card -------------------------------------------------------- */
+
+function waitForRestart(container, then){
+  container.innerHTML = "";
+  const label = E("span", null, "Restarting…");
+  container.appendChild(E("div", { class: "row" }, Spinner(), label));
+  const start = Date.now();
+  const tick = async () => {
+    try { then(await api("/api/state")); return; }
+    catch (e){
+      if (Date.now() - start < 90000) setTimeout(tick, 1500);
+      else label.textContent = "Taking longer than expected — check the ticker's screen.";
+    }
+  };
+  setTimeout(tick, 1500);
+}
+
+/* OTA: don't trust an immediate poll (may still be the old firmware answering) -
+   wait for a poll to fail (device restarting) or 15s to pass, then wait for it
+   to come back (up to ~90s), then report the version it actually booted with. */
+function waitForOtaRestart(container, prevVersion){
+  container.innerHTML = "";
+  const label = E("span", null, "Waiting for the ticker to restart…");
+  container.appendChild(E("div", { class: "row" }, Spinner(), label));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  (async () => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 15000){
+      await sleep(1000);
+      try { await api("/api/state"); } catch (e){ break; }
+    }
+    label.textContent = "Waiting for the ticker to come back…";
+    const t1 = Date.now();
+    for (;;){
+      await sleep(1500);
+      try {
+        const s = await api("/api/state");
+        container.innerHTML = "";
+        container.appendChild(s.version && s.version !== prevVersion ?
+          E("div", { class: "msg ok" }, "Updated to " + s.version + ". Reload to continue.") :
+          E("div", { class: "msg warn" }, "Still running " + (s.version || prevVersion) +
+            " — the update may have been rolled back."));
+        return;
+      } catch (e){
+        if (Date.now() - t1 >= 90000){
+          container.innerHTML = "";
+          container.appendChild(E("div", { class: "msg warn" }, "Taking longer than expected — check the ticker's screen."));
+          return;
+        }
+      }
+    }
+  })();
+}
+
+/* Through api(), not a plain link, so an ended session is noticed rather
+   than saved as the "backup". */
+/* A plain download, named by the ticker. Checked first, so an ended session
+   shows the login rather than saving an error as the "backup". */
+async function exportSettings(){
+  try { ST = await api("/api/state"); } catch (e){ toast(e.message); return; }
+  if (!ST.logged_in){ if (onSessionLost) onSessionLost(); return; }
+  location.href = "/api/export";
+}
+
+function DeviceCard(){
+  const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Device"));
+  /* Setup mode opens in the phone's sign-in window, which cannot pick files.
+     A new tab is the likeliest way out of it into the real browser. */
+  if (ST.mode === "setup"){
+    const url = "http://" + location.host + "/";
+    card.appendChild(E("div", { class: "msg warn", style: "margin:0 0 14px" },
+      "Import and firmware updates need a full browser. If no file picker opens, open ",
+      E("a", { href: url, target: "_blank", rel: "noopener" }, url),
+      " in Chrome or Safari while on this ticker's Wi-Fi."));
+  }
+
+  const impErr = E("div", { class: "msg err hidden" });
+  const impFile = E("input", { type: "file", accept: "application/json", class: "hidden" });
+  impFile.onchange = async () => {
+    const f = impFile.files[0];
+    if (!f) return;
+    impErr.classList.add("hidden");
+    try {
+      const r = await apiJson("/api/import", "POST", JSON.parse(await f.text()));
+      const notes = (r.warnings || []).concat(
+        r.restart_needed ? ["Restart the ticker to use the imported networks."] : []);
+      render(); /* every card shows the imported values */
+      toast(["Imported."].concat(notes).join(" "), notes.length ? "warn" : "");
+    } catch (e){ flash(impErr, e.message || "not valid settings JSON", false); }
+    impFile.value = "";
+  };
+  card.appendChild(E("div", { class: "field" }, E("label", null, "Settings backup"),
+    E("div", { class: "row wrap" },
+      E("button", { class: "btn small", onclick: exportSettings }, "Export"),
+      E("button", { class: "btn small", onclick: () => impFile.click() }, "Import…")),
+    impFile, impErr));
+
+
+  const otaFile = E("input", { type: "file", accept: ".bin" });
+  const otaErr = E("div", { class: "msg err hidden" });
+  const otaProg = E("div", { class: "progress hidden" }, E("b"));
+  const otaBox = E("div", { class: "mt" });
+  const otaBtn = E("button", { class: "btn small" }, "Upload");
+  otaBtn.onclick = () => {
+    const f = otaFile.files[0];
+    if (!f){ flash(otaErr, "Choose a .bin file first.", false); return; }
+    otaErr.classList.add("hidden");
+    otaProg.classList.remove("hidden");
+    otaBtn.disabled = true;
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/ota");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) otaProg.querySelector("b").style.width = (ev.loaded / ev.total * 100) + "%"; };
+    xhr.onload = () => {
+      let data = null; try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status === 401 && onSessionLost){ ST.logged_in = false; onSessionLost(); return; }
+      if (xhr.status >= 200 && xhr.status < 300){
+        waitForOtaRestart(otaBox, ST.version);
+      } else { flash(otaErr, (data && data.error) || "upload failed", false); otaBtn.disabled = false; }
+    };
+    xhr.onerror = async () => {
+      /* A refused upload is cut off mid-body, so a lost session shows up here
+         rather than as a 401. */
+      try { ST = await api("/api/state"); } catch (e){}
+      if (!ST.logged_in && onSessionLost){ onSessionLost(); return; }
+      flash(otaErr, "upload interrupted", false); otaBtn.disabled = false;
+    };
+    xhr.send(f);
+  };
+  card.appendChild(E("div", { class: "field" }, E("label", null, "Firmware update (.bin)"),
+    E("div", { class: "row" }, otaFile, otaBtn), otaProg, otaErr, otaBox));
+
+  const restartBtn = E("button", { class: "btn" }, "Restart ticker");
+  const restartBox2 = E("div", { class: "mt" });
+  restartBtn.onclick = async () => {
+    if (!confirm("Restart the ticker now?")) return;
+    try { await apiJson("/api/restart", "POST", {}); } catch (e){ toast(e.message); return; }
+    waitForRestart(restartBox2, () => location.reload());
+  };
+  card.appendChild(E("div", { class: "field" }, restartBtn, restartBox2));
+  return card;
+}
+
+boot();
+</script>
+</body>
+</html>

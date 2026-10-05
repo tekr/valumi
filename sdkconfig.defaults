@@ -1,0 +1,54 @@
+# --- Target / flash -----------------------------------------------------
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# --- Partitions ---------------------------------------------------------
+# The app binary exceeds the default 1 MB factory partition.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# --- Console over the native USB-Serial-JTAG (GPIO12/13) ----------------
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# --- Performance --------------------------------------------------------
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_FREERTOS_HZ=1000
+
+# --- Memory -------------------------------------------------------------
+# No PSRAM: single framebuffer (set in code) + Wi-Fi + one TLS session must
+# share 512 KB. Trim the Wi-Fi buffer pools from their throughput-oriented
+# defaults; a 6 KB JSON poll every 5 s needs nothing like the defaults.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=12
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=12
+
+# snprintf of floats plus TLS error paths want more than the 3.5 KB default.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
+
+# --- TLS ----------------------------------------------------------------
+# Certificate bundle for okx.com; validation needs SNTP time (handled in app).
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+
+# Cheap TLS resumption if the connection does drop: an abbreviated handshake
+# instead of a full certificate exchange.
+CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS=y
+
+
+# --- OTA ----------------------------------------------------------------
+# A new image must confirm itself (firmware.c) or the
+# bootloader rolls back to the previous one on the next reset.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# --- Web panel ----------------------------------------------------------
+# Phones send long headers (user agent, cookies, client hints); the 512 byte
+# default answers some of them with 431.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+
+# TLS record buffers sized to the traffic instead of held at 16 KB in + 4 KB
+# out for the life of the connection, and the certificate data freed once the
+# handshake is done. OKX's records are a few KB at most.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y

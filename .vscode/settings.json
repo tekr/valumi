@@ -1,0 +1,32 @@
+{
+  // clangd needs to ask riscv32-esp-elf-gcc where its own system headers live,
+  // otherwise stdio.h and the rest of newlib come up missing. The glob matches
+  // whatever toolchain version ESP-IDF installed.
+  "clangd.arguments": [
+    "--query-driver=${userHome}/.espressif/tools/riscv32-esp-elf/**/bin/riscv32-esp-elf-*",
+    "--background-index",
+    "--header-insertion=never",
+    "--completion-style=detailed",
+    "--pch-storage=memory"
+  ],
+
+  // The bundled Microsoft C/C++ IntelliSense engine does not understand the
+  // cross-compile setup and would report a second, wrong set of errors.
+  "C_Cpp.intelliSenseEngine": "disabled",
+
+  "files.associations": {
+    "*.h": "c",
+    "sdkconfig": "properties",
+    "sdkconfig.defaults": "properties"
+  },
+
+  // Build output and downloaded components are noise in search results.
+  "files.exclude": {
+    "**/build": true,
+    "**/managed_components": true
+  },
+  "search.exclude": {
+    "**/build": true,
+    "**/managed_components": true
+  }
+}

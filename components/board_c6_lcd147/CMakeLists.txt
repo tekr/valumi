@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS
+        "board_display.c"
+        "board_gfx.c"
+        "board_imu.c"
+        "board_imu_qmi8658.c"
+        "board_lcd_jd9853.c"
+        "board_orientation.c"
+        "board_button.c"
+        "board_font.c"
+        "board_touch.c"
+        "board_variant.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        driver
+        esp_lcd
+        esp_driver_gpio
+        esp_driver_spi
+        esp_driver_ledc
+        esp_driver_i2c
+        esp_timer
+)

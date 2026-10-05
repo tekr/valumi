@@ -1,0 +1,39 @@
+# clangd config for this ESP-IDF project.
+#
+# The real build uses riscv32-esp-elf-gcc, so compile_commands.json is full of
+# GCC-only flags that clang does not recognise. Without scrubbing them, every
+# file in the project lights up with bogus "unknown argument" errors and clangd
+# gives up before it indexes anything.
+#
+# System headers (stdio.h, and everything under newlib) live in the GCC
+# sysroot, which clang cannot guess. The --query-driver argument in
+# .vscode/settings.json is what makes clangd ask GCC where they are.
+
+CompileFlags:
+  # Deliberately NOT overriding the compiler here. Leaving riscv32-esp-elf-gcc
+  # as the driver is what lets --query-driver pull in the newlib sysroot; force
+  # it to plain clang and every #include <stdio.h> stops resolving.
+  Add:
+    # ESP-IDF passes several GCC warning names clang has never heard of.
+    - -Wno-unknown-warning-option
+    - -Wno-unknown-attributes
+    - -Wno-ignored-optimization-argument
+  Remove:
+    # GCC-only codegen flags.
+    - -fno-tree-switch-conversion
+    - -fstrict-volatile-bitfields
+    - -fno-shrink-wrap
+    - -fno-reorder-blocks-and-partition
+    - -freorder-blocks-algorithm=*
+    - -fmacro-prefix-map=*
+    - --param=*
+    # Xtensa leftovers that appear in some shared IDF cmake fragments.
+    - -mlongcalls
+    - -mtext-section-literals
+
+Diagnostics:
+  # ESP-IDF headers pull in a lot transitively; the unused-include warnings are
+  # noise rather than signal here.
+  UnusedIncludes: None
+  Suppress:
+    - unknown-argument

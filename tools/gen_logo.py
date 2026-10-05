@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Render the valumi wordmark as a C source file.
+
+"valumi" in lower case, its i dotted with a four-pointed star instead of a
+round dot. Two 4-bit alpha masks of the same size come out -- the letters and
+the star -- so the firmware can draw them in different colours. Like the
+fonts, regenerate rather than hand-edit the output.
+
+A transparent PNG of the same logo comes out too, at WEB_SCALE times the
+size, for the web panel; and, with --readme, a pair for the README: one for
+light pages (dark letters) and one for dark pages.
+
+Usage:
+  gen_logo.py <ttf> <output.c> <web.png> [--readme <dir>] [--preview <png>]
+
+The ttf is Quicksand (SIL Open Font License), a variable font; the weight is
+set below. The preview shows the logo in the firmware's colours.
+"""
+
+import argparse
+import math
+import os
+import sys
+
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+
+TEXT = "valumi"
+SIZE = 34              # font size, px
+WEIGHT = 600           # Quicksand's wght axis: 300-700
+SCALE = 4              # supersampling
+STAR_RADIUS = 2.0      # star size, relative to the dot it replaces
+STAR_LIFT = 0.7        # how far above the dot the star sits, in star radii
+GLOW = 0.30            # a soft halo round the star, as a fraction of its brightness
+STAR_CURVE = 2.6       # 2 is a diamond; higher pinches the sides into a sparkle
+STAR_STRETCH = 1.18    # the vertical points a little longer than the horizontal
+WEB_SCALE = 3          # the panel's copy: sharp at its size on a phone
+TEXT_RGB = (235, 238, 245)
+STAR_RGB = (255, 200, 60)
+# On a white page the letters go dark, and the star a deeper gold to hold up.
+LIGHT_PAGE_TEXT_RGB = (31, 35, 40)
+LIGHT_PAGE_STAR_RGB = (232, 160, 0)
+
+
+def render(font, text, size):
+    img = Image.new("L", size, 0)
+    ImageDraw.Draw(img).text((size[0] // 8, size[1] // 4), text, font=font, fill=255)
+    return img
+
+
+def star(img_size, cx, cy, r):
+    pts = []
+    for k in range(360):
+        t = math.radians(k)
+        c, s = math.cos(t), math.sin(t)
+        x = math.copysign(abs(c) ** STAR_CURVE, c) * r
+        y = math.copysign(abs(s) ** STAR_CURVE, s) * r * STAR_STRETCH
+        pts.append((cx + x, cy - y))
+    img = Image.new("L", img_size, 0)
+    ImageDraw.Draw(img).polygon(pts, fill=255)
+    return img
+
+
+def render_logo(ttf):
+    """The letters and the star as two greyscale images of the same size."""
+    font = ImageFont.truetype(ttf, SIZE * SCALE)
+    font.set_variation_by_axes([WEIGHT])
+    w, h = font.getbbox(TEXT)[2] * 2, SIZE * SCALE * 3
+
+    # The dot is the ink of the final i above where a dotless i's stem
+    # begins; the star goes in its place.
+    dotless = render(font, TEXT[:-1] + "ı", (w, h))
+    dotted = render(font, TEXT, (w, h))
+    stem_top = render(font, "ı", (w, h)).getbbox()[1]
+    i_left = render(font, TEXT[:-1], (w, h)).getbbox()[2]
+    dot = dotted.crop((i_left, 0, w, stem_top - SCALE)).getbbox()
+    if dot is None:
+        sys.exit("could not find the dot of the i")
+    dot = (dot[0] + i_left, dot[1], dot[2] + i_left, dot[3])
+    r = (dot[2] - dot[0]) / 2 * STAR_RADIUS
+    cx, cy = (dot[0] + dot[2]) / 2, (dot[1] + dot[3]) / 2 - r * STAR_LIFT
+
+    text = dotless
+    sparkle = star((w, h), cx, cy, r)
+    halo = star((w, h), cx, cy, r * 1.6).filter(ImageFilter.GaussianBlur(r * 0.6))
+    sparkle = ImageChops.lighter(sparkle, halo.point(lambda v: int(v * GLOW)))
+    box = ImageChops.lighter(text, sparkle).getbbox()
+    # Widen the left side to match the glow on the right, so centring the
+    # image centres the word.
+    word = text.getbbox()
+    mid = (word[0] + word[2]) // 2
+    box = (min(box[0], 2 * mid - box[2]), box[1], max(box[2], 2 * mid - box[0]), box[3])
+    pad = SCALE
+    box = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+    size = ((box[2] - box[0]) // SCALE, (box[3] - box[1]) // SCALE)
+    text = text.crop(box).resize(size, Image.LANCZOS)
+    sparkle = sparkle.crop(box).resize(size, Image.LANCZOS)
+    return text, sparkle
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("ttf")
+    ap.add_argument("out_c")
+    ap.add_argument("out_png")
+    ap.add_argument("--readme", help="directory for logo-light.png and logo-dark.png")
+    ap.add_argument("--preview", help="the logo on a 320x172 screen, at 2x")
+    args = ap.parse_args()
+    ttf, out_c, out_png, preview = args.ttf, args.out_c, args.out_png, args.preview
+    text, sparkle = render_logo(ttf)
+    size = text.size
+
+    def nibbles(img):
+        px = [v >> 4 for v in img.tobytes()]
+        if len(px) % 2:
+            px.append(0)
+        return bytes((px[i] << 4) | px[i + 1] for i in range(0, len(px), 2))
+
+    def c_array(name, data):
+        rows = [", ".join("0x%02x" % b for b in data[i:i + 16]) for i in range(0, len(data), 16)]
+        return "const uint8_t %s[] = {\n    %s,\n};\n" % (name, ",\n    ".join(rows))
+
+    with open(out_c, "w") as f:
+        f.write("/* Generated by tools/gen_logo.py -- do not edit.\n"
+                " * Wordmark in Quicksand (SIL Open Font License 1.1), weight %d.\n"
+                " */\n\n#include \"logo.h\"\n\n" % WEIGHT)
+        f.write("const int logo_width = %d;\nconst int logo_height = %d;\n\n" % size)
+        f.write(c_array("logo_text", nibbles(text)) + "\n")
+        f.write(c_array("logo_star", nibbles(sparkle)))
+
+    global SIZE
+    SIZE *= WEB_SCALE
+    big_text, big_star = render_logo(ttf)
+    SIZE //= WEB_SCALE
+    def transparent(text_rgb, star_rgb, path):
+        img = Image.new("RGBA", big_text.size, text_rgb + (0,))
+        img.paste(Image.new("RGBA", big_text.size, text_rgb + (255,)), (0, 0), big_text)
+        img.paste(Image.new("RGBA", big_text.size, star_rgb + (255,)), (0, 0), big_star)
+        img.save(path, optimize=True)
+
+    transparent(TEXT_RGB, STAR_RGB, out_png)
+    if args.readme:
+        transparent(LIGHT_PAGE_TEXT_RGB, LIGHT_PAGE_STAR_RGB,
+                    os.path.join(args.readme, "logo-light.png"))
+        transparent(TEXT_RGB, STAR_RGB, os.path.join(args.readme, "logo-dark.png"))
+
+    if preview:
+        bg = Image.new("RGB", (320, 172), (0, 0, 0))
+        x, y = (320 - size[0]) // 2, 40
+        bg.paste(Image.new("RGB", size, TEXT_RGB), (x, y), text)
+        bg.paste(Image.new("RGB", size, STAR_RGB), (x, y), sparkle)
+        bg.resize((640, 344), Image.NEAREST).save(preview)
+    print("logo %dx%d" % size)
+
+
+if __name__ == "__main__":
+    main()

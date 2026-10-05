@@ -1,0 +1,11 @@
+build/
+managed_components/
+sdkconfig
+sdkconfig.old
+compile_commands.json
+.cache/
+.DS_Store
+__pycache__/
+
+# Development Wi-Fi seed (see main/app_config.h): never committed.
+main/wifi_secrets.h
