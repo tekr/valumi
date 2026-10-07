@@ -260,41 +260,6 @@ void board_gfx_blend_pixel(uint16_t *fb, int x, int y, uint16_t color, uint8_t a
     *p = (uint16_t)((out >> 8) | (out << 8));
 }
 
-void board_gfx_line(uint16_t *fb, int x0, int y0, int x1, int y1, uint16_t color)
-{
-    /* Bresenham; per-pixel clipping via board_gfx_pixel is fine at the segment
-     * lengths a 320-px-wide chart produces. */
-    int dx = x1 > x0 ? x1 - x0 : x0 - x1;
-    int dy = y1 > y0 ? y1 - y0 : y0 - y1;
-    int sx = x0 < x1 ? 1 : -1;
-    int sy = y0 < y1 ? 1 : -1;
-    int err = dx - dy;
-
-    for (;;) {
-        board_gfx_pixel(fb, x0, y0, color);
-        if (x0 == x1 && y0 == y1) {
-            break;
-        }
-        int e2 = 2 * err;
-        if (e2 > -dy) {
-            err -= dy;
-            x0 += sx;
-        }
-        if (e2 < dx) {
-            err += dx;
-            y0 += sy;
-        }
-    }
-}
-
-int board_gfx_text_width(const char *str, int scale)
-{
-    if (scale < 1) {
-        scale = 1;
-    }
-    return (int)strlen(str) * BOARD_GFX_GLYPH_W * scale;
-}
-
 int board_gfx_text(uint16_t *fb, int x, int y, const char *str, uint16_t color, int scale)
 {
     if (scale < 1) {

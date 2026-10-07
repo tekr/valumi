@@ -19,11 +19,12 @@ Status: shipped, release 1.2. Targets both 1.47" C6 boards (4 MB plain,
 | **Setup** (device is its own hotspot) | no saved networks (first boot, after factory reset), or no saved network answered for `APP_SETUP_FALLBACK_S` (120 s) | not needed -- the on-screen hotspot passphrase is the gate |
 | **Normal** (client of a saved network) | any saved network connects | required |
 
-Setup mode keeps retrying the saved networks in the background every 60 s,
-so a ticker that fell back because the router was down returns to Normal
-mode without help. Those retries pause while a phone is connected to the
-hotspot: joining another network can move the radio to that network's
-channel, and the hotspot moves with it, which would drop the phone.
+Setup mode keeps retrying the saved networks in the background, so a ticker
+that fell back because the router was down returns to Normal mode without
+help. While a phone is connected to the hotspot it only looks, every 60 s,
+with a scan that keeps the phone connected, and joins only when a saved
+network is actually there: joining moves the radio to that network's
+channel, and the hotspot with it, which drops the phone.
 
 Setup mode stays reachable even when entered as a fallback from Normal mode
 (owner decision): anyone who has seen the hotspot passphrase on the screen
@@ -40,7 +41,7 @@ phone stays associated.
   two tickers side by side differ), WPA2 with a passphrase that is
   regenerated every time setup mode starts -- one seen on screen is no use
   later.
-- Screen shows a Wi-Fi QR code (`WIFI:S:..;T:WPA;P:..;;`) carrying the
+- Screen shows a Wi-Fi QR code (`WIFI:T:WPA;S:..;P:..;;`) carrying the
   passphrase, so a phone camera joins without anything being typed; the
   SSID and passphrase are also printed beside it for laptops.
 - Captive portal: a DNS server answers every query with the hotspot's own
@@ -103,7 +104,7 @@ restored afterwards.
 
 ## Settings
 
-Stored in NVS as one fixed-size blob (`settings_store.c`). Defaults come
+Stored in NVS as JSON (`settings_store.c`; see Compatibility). Defaults come
 from `app_config.h`. **Live** = applied without a reboot.
 
 | Setting | Default | Live | Notes |
@@ -159,7 +160,7 @@ does not apply it.
   clear, for a desk ticker on a home network or the owner's own hotspot.
 - One self-contained page (HTML/CSS/JS inline, no CDN, since setup mode has
   no internet), gzipped and embedded in the app image.
-- Routes: `GET /`, `GET /login?t=`, `GET /capport`, `GET /api/state`,
+- Routes: `GET /`, `GET /logo.png`, `GET /login?t=`, `GET /capport`, `GET /api/state`,
   `POST /api/login`, `POST /api/logout`, `GET/PUT /api/settings`,
   `GET /api/status`, `GET /api/scan`,
   `POST /api/wifi`, `GET /api/export`, `POST /api/import`, `POST /api/ota`,
@@ -180,10 +181,9 @@ does not apply it.
   `max_ms`, `label_max`, `inst_max`, `ssid_max`, `wifi_pw_min`/`max`), so
   the page validates by the same rules as the firmware. PUT never touches
   Wi-Fi networks, so it never needs a restart; it responds
-  `{"ok","restart_needed":false,"warnings","settings"}`. New or reordered
-  coins are checked against OKX before being accepted; one OKX does not
-  list is refused, one that cannot be reached in time is accepted with a
-  warning.
+  `{"ok","restart_needed":false,"warnings","settings"}`. New coins are
+  checked against OKX before being accepted; one OKX does not list is
+  refused, one that cannot be reached in time is accepted with a warning.
 - `POST /api/wifi`: saves the network list and restarts.
 - `GET /api/status` (authenticated, polled): `wifi{mode,ssid,ip,rssi}`,
   `system{version,heap_min_free,partition}`, `clock_synced`. The page shows
@@ -200,7 +200,9 @@ does not apply it.
   the imported networks differ from the current ones.
 - `POST /api/ota`: streamed straight to the inactive slot, never buffered
   in RAM; checked for the ESP image magic, the chip, and the project name
-  before anything is written.
+  before anything is written. A full flash image (the release file, flashed
+  at 0 over USB) is accepted too: the bytes before its app slot are skipped,
+  so one download serves both a first install and updates.
 
 ## OTA
 
@@ -237,8 +239,10 @@ RAM -- it is served straight from flash.
 
 ## Code structure
 
-- `main.c` -- the render loop, page transitions, screen state machine,
-  button handling, and wiring the other modules together.
+- `main.c` -- the render loop, screen state machine, button handling, and
+  wiring the other modules together.
+- `page_transition.c` -- the frames of a page change: slide, cover, cascade
+  and wipe, sideways or up and down, drawn from `ui.c`'s rows.
 - `market.c` -- the net task: holds the exchange connection, polls prices
   and candles for the on-screen and next coin, and answers coin-list and
   coin-check requests from the panel on that same task.
@@ -259,8 +263,10 @@ Settings are saved in NVS as JSON: the export format plus the Wi-Fi and
 panel passwords. On boot the firmware reads it field by field. A field it
 does not know is ignored, and a missing or invalid one keeps its default.
 So an update that adds or drops a setting keeps every other setting, and a
-new setting starts at its default. Only unreadable saved settings send the
-ticker back to setup mode.
+new setting starts at its default. Fields a newer firmware saved inside a
+network, coin or the night object are skipped the same way, so a rollback
+keeps them too. Saved settings that cannot be read at all leave the ticker
+on defaults for that boot, in setup mode, without being overwritten.
 
 ## Out of scope
 

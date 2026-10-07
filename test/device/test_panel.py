@@ -333,6 +333,9 @@ def test_put_live_roundtrip(ctx):
     new_night_bright = 66 if cur["night"]["brightness"] != 66 else 44
     tz = cur["tz_offset_min"]
     new_tz = tz + 15 if tz + 15 <= 840 else tz - 15
+    moves = ["slide", "cover", "cascade", "wipe"]
+    new_move = moves[(moves.index(cur["transition"]) + 1) % len(moves)]
+    new_dir = "vertical" if cur["transition_direction"] == "horizontal" else "horizontal"
 
     payload = {
         "dwell_s": new_dwell,
@@ -343,6 +346,8 @@ def test_put_live_roundtrip(ctx):
         "night": {"on": new_night_on, "start": new_start, "end": new_end,
                  "brightness": new_night_bright},
         "tz_offset_min": new_tz,
+        "transition": new_move,
+        "transition_direction": new_dir,
     }
     r = put_json(ctx, "/api/settings", payload)
     assert_status(r, 200)
@@ -362,6 +367,8 @@ def test_put_live_roundtrip(ctx):
         assert s["night"]["end"] == new_end, where
         assert s["night"]["brightness"] == new_night_bright, where
         assert s["tz_offset_min"] == new_tz, where
+        assert s["transition"] == new_move, where
+        assert s["transition_direction"] == new_dir, where
 
     check(body["settings"], "in the PUT response")
     check(get(ctx, "/api/settings").json(), "in a following GET")

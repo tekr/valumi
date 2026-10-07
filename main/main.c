@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <time.h>
 
 #include "app_config.h"
 #include "auth.h"
@@ -183,7 +184,7 @@ static bool render_spin(uint16_t *fb, const ui_coin_t *coin)
     }
     float a = p < 0.5f ? 1.0f - p * 2.0f : p * 2.0f - 1.0f;
     ui_begin_frame(fb);
-    ui_draw_page(fb, coin, 0, (uint8_t)(a * 255.0f));
+    ui_draw_page(fb, coin, (uint8_t)(a * 255.0f));
     return true;
 }
 
@@ -356,7 +357,7 @@ static int snapshot_coins(uint32_t *gen)
 static void draw_settled_page(uint16_t *fb)
 {
     ui_begin_frame(fb);
-    ui_draw_page(fb, &s_snap[s_shown_page], 0, 255);
+    ui_draw_page(fb, &s_snap[s_shown_page], 255);
 }
 
 static void render_ticker(uint16_t *fb, int n, ui_net_status_t net)
@@ -583,8 +584,10 @@ void app_main(void)
             s_pending_dir = 0;
             s_shown_page = carousel_page();
         }
-        for (int i = 0; i < n && !have_any_data; i++) {
-            have_any_data = s_snap[i].last > 0.0f;
+        if (!have_any_data) {
+            for (int i = 0; i < n && !have_any_data; i++) {
+                have_any_data = s_snap[i].last > 0.0f;
+            }
             /* Land on the current page rather than transitioning out of the
              * splash. */
             s_shown_page = carousel_page();

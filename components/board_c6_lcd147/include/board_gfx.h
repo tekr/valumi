@@ -39,10 +39,10 @@ void board_gfx_get_clip(int *x0, int *y0, int *x1, int *y1);
 /** Fill the whole framebuffer with one colour. */
 void board_gfx_clear(uint16_t *fb, uint16_t color);
 
-/** Set a single pixel; coordinates outside the screen are ignored. */
+/** Set a single pixel; outside the clip window (or the screen) it is dropped. */
 void board_gfx_pixel(uint16_t *fb, int x, int y, uint16_t color);
 
-/** Filled axis-aligned rectangle, clipped to the screen. */
+/** Filled axis-aligned rectangle, cut to the clip window. */
 void board_gfx_fill_rect(uint16_t *fb, int x, int y, int w, int h, uint16_t color);
 
 /** One-pixel-wide rectangle outline. */
@@ -50,9 +50,6 @@ void board_gfx_rect(uint16_t *fb, int x, int y, int w, int h, uint16_t color);
 
 void board_gfx_hline(uint16_t *fb, int x, int y, int w, uint16_t color);
 void board_gfx_vline(uint16_t *fb, int x, int y, int h, uint16_t color);
-
-/** Arbitrary line segment (Bresenham), clipped per pixel. */
-void board_gfx_line(uint16_t *fb, int x0, int y0, int x1, int y1, uint16_t color);
 
 /** Blend @p color over the existing pixel at opacity @p alpha (0-255). */
 void board_gfx_blend_pixel(uint16_t *fb, int x, int y, uint16_t color, uint8_t alpha);
@@ -71,9 +68,6 @@ void board_gfx_fill_circle(uint16_t *fb, int cx, int cy, int r, uint16_t color);
  * just past the last glyph.
  */
 int board_gfx_text(uint16_t *fb, int x, int y, const char *str, uint16_t color, int scale);
-
-/** Width in pixels that board_gfx_text() would occupy. */
-int board_gfx_text_width(const char *str, int scale);
 
 /**
  * @brief Rotate an image about the screen centre into the framebuffer.
@@ -103,9 +97,9 @@ void board_gfx_rotate_blit(uint16_t *dst, const uint16_t *src, int src_w, int sr
  * @brief Box-filter a full framebuffer down to half size in each axis.
  *
  * @p dst must hold (width/2) * (height/2) pixels. Averaging rather than
- * dropping pixels matters here: dropped pixels alias thin strokes -- a one
- * pixel chart line vanishes and reappears as the image turns, which reads as
- * flicker rather than as softness.
+ * dropping pixels matters here: dropped pixels alias thin strokes and text
+ * edges, which vanish and reappear as the image turns and read as flicker
+ * rather than as softness.
  */
 void board_gfx_shrink_half(uint16_t *dst, const uint16_t *src);
 

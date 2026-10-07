@@ -71,8 +71,8 @@ int carousel_jump(int dir);
 
 int carousel_page(void);
 
-/** Consistent snapshot; the two fields must agree or the net task pre-fetches
- * the wrong coin across a page change. */
+/** Consistent snapshot: all fields from one lock hold, or the net task
+ * pre-fetches the wrong coin across a page change. */
 void carousel_get(carousel_view_t *out);
 
 #ifdef __cplusplus

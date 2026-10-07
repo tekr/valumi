@@ -47,17 +47,19 @@ Exit status is non-zero if any test failed.
 ## What it does *not* touch
 
 The test snapshots `GET /api/settings` at the start and restores the live
-fields (`coins`, `dwell_s`, `orientation`, `brightness`, `range`, `night`,
-`tz_offset_min`) at the end, in a `finally` block, so a run leaves the
-device the way it found it -- regardless of whether every test passed.
+fields (`coins`, `dwell_s`, `orientation`, `brightness`, the transition
+settings, `range`, `chart_style`, `night`, `tz_offset_min`) at the end, in a
+`finally` block, so a run leaves the device the way it found it --
+regardless of whether every test passed.
 
-It never touches Wi-Fi settings or restarts the device outside of the
+It never changes the Wi-Fi networks or restarts the device outside of the
 optional OTA test:
 
-- `POST /api/wifi` and `POST /api/restart` are only ever called
-  *unauthenticated*, to check they correctly refuse a request with no
-  session. A real, logged-in call to either would rewrite the network list
-  or reboot the device, so it is never attempted.
+- `POST /api/wifi` is only called with requests the ticker must refuse
+  before saving anything (an empty list, a bad static address, an unknown
+  key), and `POST /api/restart` only with a content type it rejects.
+- The import test sends the ticker's own exported networks plus one it has
+  no password for, which is skipped, so the list comes back unchanged.
 - `POST /api/ota` is only exercised when you explicitly pass `--firmware`.
 
 ## Coverage
@@ -78,8 +80,9 @@ optional OTA test:
   otherwise), rejects unknown keys (400, naming the key), rejects out-of-range `dwell_s`/
   `brightness`, and is atomic -- an invalid combined PUT changes nothing.
 - A valid `PUT /api/settings` round-trips `dwell_s`, `brightness`, `range`,
-  `orientation`, `night`, and `tz_offset_min`, with `restart_needed: false`
-  and the resulting `settings` in the response body.
+  `chart_style`, `transition`, `transition_direction`, `orientation`,
+  `night`, and `tz_offset_min`, with `restart_needed: false` and the
+  resulting `settings` in the response body.
 - Coins, through `PUT /api/settings`: a malformed id (400), adding a new
   valid coin (label upper-cased), an exchange-unknown coin
   (400, "does not list"), duplicates (400), 0 coins (400), 16 coins (400,

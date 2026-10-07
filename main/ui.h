@@ -6,11 +6,12 @@
  *
  * A frame is composed in layers so transitions can mix them:
  *
- *   ui_begin_frame(fb);                     // background
- *   ui_draw_page(fb, coin, x_off, alpha);   // page content, possibly two of
- *   ui_draw_status(fb, net);                // fixed chrome, never animated
+ *   ui_begin_frame(fb);                 // background
+ *   ui_draw_page(fb, coin, alpha);      // page content, or ui_draw_page_rows()
+ *   ui_draw_status(fb, net, pulse);     // fixed chrome, never animated
  *
- * page_transition.c composes the frames of a page change from these.
+ * page_transition.c composes the frames of a page change from these, drawing
+ * both pages row by row.
  */
 #pragma once
 
@@ -47,9 +48,9 @@ typedef struct {
 } ui_coin_t;
 
 typedef enum {
-    UI_NET_CONNECTING, /* no Wi-Fi association: red dot */
-    UI_NET_DEGRADED,   /* Wi-Fi up but API fetches failing: orange dot */
-    UI_NET_OK,         /* green dot */
+    UI_NET_CONNECTING, /* no Wi-Fi association: violet, breathing */
+    UI_NET_DEGRADED,   /* Wi-Fi up but API fetches failing: amber */
+    UI_NET_OK,         /* a quiet steel blue */
 } ui_net_status_t;
 
 /** Clear the frame to the background colour. */
@@ -58,11 +59,10 @@ void ui_begin_frame(uint16_t *fb);
 /**
  * @brief Draw one coin's page content.
  *
- * @param x_off horizontal shift in pixels
  * @param alpha 255 = fully present; lower values fade every element toward
  *              the background
  */
-void ui_draw_page(uint16_t *fb, const ui_coin_t *coin, int x_off, uint8_t alpha);
+void ui_draw_page(uint16_t *fb, const ui_coin_t *coin, uint8_t alpha);
 
 /* A page is three rows -- the title, the change figures and the chart --
  * and a transition may move and fade each on its own. */

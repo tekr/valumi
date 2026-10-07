@@ -32,7 +32,7 @@
 
 #define DOT_CX 304
 #define DOT_CY 18
-#define DOT_R 5
+#define STATUS_DOT_R 5
 
 /* Smallest move the highs-and-lows chart keeps, as a fraction of the chart's height:
  * about two pixels. */
@@ -48,34 +48,13 @@
 #define FILL_LIGHTEN 70
 #define COL_DOWN_FILL board_rgb565(255, 82, 95)
 
-/* ---- Per-frame draw state (set by ui_draw_page) ------------------------- */
+/* ---- Per-row draw state (set by row_begin) ------------------------------ */
 /* The alpha and offset of the row being drawn thread through every helper;
  * keeping them in statics for the duration of one ui_draw_page_rows call
  * keeps the signatures readable. Rendering stays single-threaded by design. */
 static uint8_t s_alpha = 255;
 static int s_xoff = 0;
 static int s_yoff = 0;
-
-/* Lerp a colour toward the background by the current page alpha, so a faded
- * page's elements sink into the backdrop rather than toward black. */
-static uint16_t page_col(uint16_t c)
-{
-    if (s_alpha >= 255) {
-        return c;
-    }
-    uint16_t bg = (uint16_t)((COL_BG >> 8) | (COL_BG << 8));
-    uint16_t fg = (uint16_t)((c >> 8) | (c << 8));
-
-    uint32_t br = (bg >> 11) & 0x1F, bgc = (bg >> 5) & 0x3F, bb = bg & 0x1F;
-    uint32_t fr = (fg >> 11) & 0x1F, fgc = (fg >> 5) & 0x3F, fbl = fg & 0x1F;
-
-    uint32_t r = (fr * s_alpha + br * (255 - s_alpha)) / 255;
-    uint32_t g = (fgc * s_alpha + bgc * (255 - s_alpha)) / 255;
-    uint32_t b = (fbl * s_alpha + bb * (255 - s_alpha)) / 255;
-
-    uint16_t out = (uint16_t)((r << 11) | (g << 5) | b);
-    return (uint16_t)((out >> 8) | (out << 8));
-}
 
 /* Blend two colours (both panel byte order), t in 0..255 toward b. */
 static uint16_t mix_col(uint16_t a, uint16_t b, uint8_t t)
@@ -92,6 +71,13 @@ static uint16_t mix_col(uint16_t a, uint16_t b, uint8_t t)
 
     uint16_t out = (uint16_t)((r << 11) | (g << 5) | b2);
     return (uint16_t)((out >> 8) | (out << 8));
+}
+
+/* A colour at the current row's alpha: faded toward the background, so a
+ * dimmed page sinks into the backdrop rather than toward black. */
+static uint16_t page_col(uint16_t c)
+{
+    return s_alpha >= 255 ? c : mix_col(COL_BG, c, s_alpha);
 }
 
 /* ---- Formatting --------------------------------------------------------- */
@@ -205,8 +191,11 @@ static inline void blend_into(uint16_t *p, rgb_t fg, int a256)
 #define STROKE_HALF SQ /* half the line's width: a 2 px stroke */
 #define STROKE_SUB 2   /* samples across each pixel column */
 #define STROKE_WIN (STROKE_HALF * STROKE_SUB / SQ) /* samples in half a width */
-#define STROKE_PAD 4   /* rows the stroke may reach above or below the chart */
-#define DOT_RADIUS (SQ * 33 / 10)
+/* Rows kept above the chart in the coverage buffer: the stroke reaches at
+ * most one row past it, but its top must stay positive for the row
+ * division to round the right way. */
+#define STROKE_PAD 4
+#define LIVE_DOT_RQ (SQ * 33 / 10) /* the live dot's radius, 1/32 px */
 /* The widest chart: one point a column, as the highs-and-lows line has. */
 #define LINE_W (BOARD_LCD_V_RES - 2 * MARGIN)
 
@@ -378,7 +367,7 @@ static void draw_stroke_aa(uint16_t *fb, int x, int y, const heights_t *hs, uint
     }
 #undef SAMPLE_T
 
-    draw_disc_aa(fb, x * SQ + SQ / 2 + s.span, y * SQ + hs->y[hs->n - 1], DOT_RADIUS, color);
+    draw_disc_aa(fb, x * SQ + SQ / 2 + s.span, y * SQ + hs->y[hs->n - 1], LIVE_DOT_RQ, color);
 }
 
 /* The line through @p v. Under it either a gradient fill or, given
@@ -550,8 +539,8 @@ void ui_draw_status(uint16_t *fb, ui_net_status_t net, float pulse)
         break;
     }
     }
-    board_gfx_fill_circle(fb, DOT_CX, DOT_CY, DOT_R + 2, COL_GRID);
-    board_gfx_fill_circle(fb, DOT_CX, DOT_CY, DOT_R, col);
+    board_gfx_fill_circle(fb, DOT_CX, DOT_CY, STATUS_DOT_R + 2, COL_GRID);
+    board_gfx_fill_circle(fb, DOT_CX, DOT_CY, STATUS_DOT_R, col);
 }
 
 /* Rows of the page, top to bottom: where each starts and the last ends. */
@@ -697,11 +686,11 @@ void ui_draw_page_rows(uint16_t *fb, const ui_coin_t *c, const ui_shift_t rows[U
     s_yoff = 0;
 }
 
-void ui_draw_page(uint16_t *fb, const ui_coin_t *c, int x_off, uint8_t alpha)
+void ui_draw_page(uint16_t *fb, const ui_coin_t *c, uint8_t alpha)
 {
     ui_shift_t rows[UI_PAGE_ROWS];
     for (int i = 0; i < UI_PAGE_ROWS; i++) {
-        rows[i] = (ui_shift_t){.dx = (int16_t)x_off, .alpha = alpha};
+        rows[i] = (ui_shift_t){.alpha = alpha};
     }
     ui_draw_page_rows(fb, c, rows);
 }

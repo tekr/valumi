@@ -138,6 +138,7 @@ typedef struct {
  * selected. On the 5-minute refresh the hour it spans drifts between 60 and
  * 65 minutes; for a change indicator that is well inside the noise. */
 #define APP_H1_BAR "1m"
+#define APP_H1_RANGE 0 /* the range whose change figure it feeds: 1D */
 
 /* ---- Display ----------------------------------------------------------- */
 /* How long the address and login QR screen stays up: after connecting, and
@@ -154,9 +155,10 @@ typedef struct {
  * It must stay above the worst-case age of HEALTHY data. Only the on-screen
  * coin is polled, so a coin's price ages across the rest of the carousel
  * before its pre-fetch:
- *     (coins - 1) * dwell + APP_TICKER_INTERVAL_S - APP_PREFETCH_LEAD_S
- * Coins and dwell are now owner settings (15 coins at 15 s is 216 s), so the
- * threshold is that figure plus APP_STALE_MARGIN_S, computed at run time
- * (coin_stale_after_s), and never less than APP_STALE_AFTER_S. */
+ *     (coins - 1) * (dwell + transition) + APP_TICKER_INTERVAL_S - APP_PREFETCH_LEAD_S
+ * Coins, dwell and transition are owner settings (15 coins at 15 s with a
+ * 3 s transition is 258 s), so the threshold is that figure plus
+ * APP_STALE_MARGIN_S, computed at run time (coin_stale_after_s), and never
+ * less than APP_STALE_AFTER_S. */
 #define APP_STALE_MARGIN_S 4
 #define APP_STALE_AFTER_S 30

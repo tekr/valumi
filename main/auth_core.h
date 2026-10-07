@@ -3,7 +3,7 @@
  *
  * Pure: randomness and time are passed in, so every rule here -- single use,
  * expiry, eviction, lockout -- is tested on the host. auth.c wraps it with a
- * mutex, the hardware RNG, and the password hash.
+ * mutex and the hardware RNG.
  *
  * Everything lives in RAM. A reboot logs everyone out and voids any QR token
  * on screen, which is the right failure direction.
@@ -21,7 +21,9 @@ extern "C" {
 #define AUTH_TOKEN_BYTES 16
 #define AUTH_TOKEN_HEX (AUTH_TOKEN_BYTES * 2)
 #define AUTH_MAX_SESSIONS 4
-/* A session unused this long is dropped. Matches the cookie's lifetime. */
+/* A session unused this long is dropped. The cookie is given the same
+ * lifetime, counted from login, so a daily user is still logged out after
+ * 30 days and logs in again. */
 #define AUTH_SESSION_IDLE_US (30LL * 24 * 3600 * 1000000)
 #define AUTH_MAX_FAILS 5
 #define AUTH_LOCKOUT_US (30LL * 1000000)

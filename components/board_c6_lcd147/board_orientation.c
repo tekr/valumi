@@ -33,13 +33,8 @@ static int64_t s_last_sample_us;
 
 esp_err_t board_orientation_init(void)
 {
-    board_imu_init();
-
-    /* The simulated source sweeps gravity right round the compass every 13
-     * seconds. Driving a screen flip from that would be a spinning display and
-     * a puzzled owner, so anything but a real part counts as no sensor. */
-    if (board_imu_source() != BOARD_IMU_SOURCE_QMI8658) {
-        ESP_LOGI(TAG, "no accelerometer (%s) - orientation locked", board_imu_source_name());
+    if (board_imu_init() != ESP_OK) {
+        ESP_LOGI(TAG, "no accelerometer - orientation locked");
         return ESP_ERR_NOT_SUPPORTED;
     }
 

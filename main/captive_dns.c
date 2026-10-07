@@ -66,23 +66,19 @@ static void dns_task(void *arg)
              * them. Setup mode only, and from this task, never the render
              * one. */
             char name[64];
-            int k = 0;
-            for (int p = 12; p < n && q[p] != 0 && k < (int)sizeof(name) - 1;) {
-                int l = q[p++];
-                for (int c = 0; c < l && p < n && k < (int)sizeof(name) - 2; c++) {
-                    name[k++] = (char)q[p++];
+            int k = 0, p = 12;
+            while (p < n && q[p] != 0) {
+                for (int c = 0, l = q[p++]; c < l && p < n; c++, p++) {
+                    if (k < (int)sizeof(name) - 2) {
+                        name[k++] = (char)q[p];
+                    }
                 }
-                name[k++] = '.';
+                if (k < (int)sizeof(name) - 1) {
+                    name[k++] = '.';
+                }
             }
             name[k > 0 ? k - 1 : 0] = '\0';
-            int qtype = -1;
-            if (len > 0) {
-                int p = 12;
-                while (p < n && q[p] != 0) {
-                    p += q[p] + 1;
-                }
-                qtype = (p + 2 < n) ? (q[p + 1] << 8 | q[p + 2]) : -1;
-            }
+            int qtype = (len > 0 && p + 2 < n) ? (q[p + 1] << 8 | q[p + 2]) : -1;
             ESP_LOGI(TAG, "query %s type %d -> %s", name, qtype, len > 0 ? "answered" : "ignored");
             if (len > 0) {
                 sendto(sock, r, (size_t)len, 0, (struct sockaddr *)&from, fl);

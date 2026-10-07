@@ -38,7 +38,7 @@ A mini scrolling crypto price ticker for the Waveshare 1.47" ESP32-C6 boards.
   fade. Time per coin from 0s (a continuous scroll) to 15s.
 - **Brightness** and **night dimming** on a schedule, with a time zone.
 - **Touch board extras**: swipe to change coin, rest a finger to hold one,
-  and the accelerometer keeps the picturebupright, turning it with a short
+  and the accelerometer keeps the picture upright, turning it with a short
   animation when the board is flipped.
 - **Several Wi-Fi networks in preference order.** The ticker takes the first
   that answers, so it can work in multiple locations without config changes
@@ -93,7 +93,7 @@ shows its address and panel password for a few seconds.
 Import and firmware updates need a normal browser, as a phone's sign-in window
 cannot pick files. The hotspot address is 4.3.2.1. To open it in a normal
 browser instead, turn mobile data off first: the hotspot has no internet, so
-with mobile data on a phone sends browser traffic over mobile data instead. 
+with mobile data on a phone sends browser traffic over mobile data instead.
 
 **Afterwards** the panel is at `http://valumi.local` (or the ticker's IP
 address). Log in with the panel password, or scan the one-time QR code. Hold
@@ -160,7 +160,8 @@ boot after a factory reset, so setup mode can still be tested.
 **Tests.** `make -C test/host` builds and runs the host unit tests (with
 AddressSanitizer) for the pure logic: settings and their JSON, button timing,
 sessions and login codes, captive DNS, night window, carousel, screen text,
-coin-list planning, candle merging and the chart path. The device test drives
+coin-list planning, network preference, Wi-Fi QR strings, candle merging
+and the chart path. The device test drives
 a real ticker's API over the network and restores what it changes:
 
 ```sh
@@ -234,8 +235,9 @@ lives in `components/board_c6_lcd147/board_lcd_jd9853.c`. Full pin map:
   its captive portal.
 - `settings*.c` -- settings, stored in NVS as JSON. Robust to firmware updates
   that add/remove fields.
-- `firmware.c` -- over-the-air updates will be rolled back if the panel is not
-  reachable for 60s after boot (unless manually restarted during that period).
+- `firmware.c` -- an over-the-air update is rolled back if the ticker restarts
+  before the panel has been reachable for 60s (a restart from the panel
+  counts as confirmation).
 
 The display runs single-buffered by necessity due to limited RAM. Exchange
 responses are buffered only while being handled; TLS uses mbedTLS's dynamic

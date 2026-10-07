@@ -55,7 +55,8 @@ static coin_t *coin_new(void)
 }
 
 /* Guards the coin list, the coins' data and the progress line. The list
- * itself only changes on the net task, which therefore reads it unlocked. */
+ * itself only changes on the net task (or before it starts), which therefore
+ * reads it unlocked. */
 static SemaphoreHandle_t s_lock;
 /* Each coin is its own ~2 KB allocation, so a new list is a shuffle of
  * pointers and kept coins keep their charts. */
@@ -65,7 +66,7 @@ static uint32_t s_coins_gen;
 static int s_page_ms; /* time per coin plus its slide in */
 static char s_progress[56] = "STARTING";
 
-/* Net task only. */
+/* Net task only, once it is running. */
 static int s_range;
 static uint32_t s_cfg_gen;
 static int64_t s_cfg_retry_us; /* after running out of memory for a coin */
@@ -272,8 +273,7 @@ static bool fetch_h1_base(coin_t *c)
 
 static bool job_due(const coin_t *c, int job, int64_t now)
 {
-    /* The baseline feeds only the 1D range's hour figure. */
-    if (job == H1_JOB && s_range != 0) {
+    if (job == H1_JOB && s_range != APP_H1_RANGE) {
         return false;
     }
     int64_t ok = c->job_ok_us[job];
