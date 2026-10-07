@@ -486,7 +486,9 @@ static void net_task(void *arg)
          * window never opens under a finger. */
         carousel_view_t car;
         carousel_get(&car);
-        bool prefetching = car.due_us - now <= lead_us;
+        /* With one coin there is no next page: the window would open and
+         * never close, and the coin would never be polled again. */
+        bool prefetching = car.next_page != car.page && car.due_us - now <= lead_us;
         int target = prefetching ? car.next_page : car.page;
         if (target >= s_num_coins) {
             target = 0;
