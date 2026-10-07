@@ -220,12 +220,6 @@ false)`, y gap 34, invert on, 80 MHz. ESP-IDF has no JD9853 driver, so one
 lives in `components/board_c6_lcd147/board_lcd_jd9853.c`. Full pin map:
 `components/board_c6_lcd147/include/board_pins.h`.
 
-ESP-IDF's ST7789 driver sets no gamma or voltage registers, which left the
-plain board's blacks navy and its dark colours tinted. After the driver's
-init the firmware sends the voltage and gamma values from Waveshare's own
-demo for the board (`st7789_tune()` in `board_display.c`), minus its
-RAM-control register, which would swap the pixel byte order.
-
 ## How it works
 
 - `main.c` -- the render task: screen, button, touch, orientation, and the
