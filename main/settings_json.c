@@ -78,10 +78,19 @@ static bool key_in(const char *key, const char *const *allowed)
     return false;
 }
 
+/* Set while reading what this ticker saved itself. A newer firmware may have
+ * saved fields inside a network, coin or the night object that this one
+ * does not know; they are skipped, or a rollback would throw the whole
+ * object away -- with the networks, that is a ticker back in setup mode. */
+static bool s_reading_stored;
+
 /* Unknown keys are an error, so a misspelt field cannot pass for success. */
 static bool only_keys(const cJSON *obj, const char *const *allowed, const char *what, char *err,
                       size_t en)
 {
+    if (s_reading_stored) {
+        return true;
+    }
     const cJSON *it;
     cJSON_ArrayForEach(it, obj)
     {
@@ -624,6 +633,7 @@ void settings_from_stored_json(settings_t *s, const cJSON *j)
     }
     char err[160];
     const cJSON *it;
+    s_reading_stored = true;
     cJSON_ArrayForEach(it, j)
     {
         settings_t work = *s;
@@ -642,6 +652,7 @@ void settings_from_stored_json(settings_t *s, const cJSON *j)
         }
         memset(&work, 0, sizeof(work));
     }
+    s_reading_stored = false;
 }
 
 /* Brackets, commas and colons inside strings (escapes included) don't

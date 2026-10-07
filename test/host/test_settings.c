@@ -645,6 +645,26 @@ static void test_stored_from_other_firmware(void)
     settings_from_stored_json(&s, j);
     cJSON_Delete(j);
     CHECK_EQ_STR(s.panel_pw, "K7RM3");
+
+    /* Fields a newer firmware saved INSIDE a network, coin or the night
+     * object are skipped too, rather than costing the whole object: with
+     * the networks, that would be a ticker back in setup mode. */
+    fresh(&s);
+    j = parse("{\"networks\":[{\"ssid\":\"Home\",\"password\":\"secret123\",\"hidden\":true}],"
+              "\"coins\":[{\"inst_id\":\"SOL-USDT\",\"colour\":\"teal\"}],"
+              "\"night\":{\"on\":true,\"start\":\"01:00\",\"end\":\"06:00\",\"brightness\":20,"
+              "\"weekends\":false}}");
+    settings_from_stored_json(&s, j);
+    cJSON_Delete(j);
+    CHECK_EQ_INT(s.n_nets, 1);
+    CHECK_EQ_STR(s.nets[0].ssid, "Home");
+    CHECK_EQ_STR(s.coins[0].inst_id, "SOL-USDT");
+    CHECK(s.night_on);
+    CHECK_EQ_INT(s.night_start_min, 60);
+
+    /* The panel and an import still refuse what they do not know. */
+    char err[160];
+    CHECK_EQ_INT(apply(&s, "{\"night\":{\"on\":true,\"weekends\":false}}", err), -1);
 }
 
 static void test_hhmm(void)
