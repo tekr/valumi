@@ -1,11 +1,11 @@
 {
   "name": "valumi",
-  "version": "1.2",
+  "version": "1.3",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-C6",
-      "parts": [{ "path": "valumi-1.2.bin", "offset": 0 }]
+      "parts": [{ "path": "valumi-1.3.bin", "offset": 0 }]
     }
   ]
 }
