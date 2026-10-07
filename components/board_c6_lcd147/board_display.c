@@ -114,6 +114,43 @@ static esp_err_t apply_orientation(void)
     return ESP_OK;
 }
 
+/* ESP-IDF's ST7789 driver sets no gamma or voltage registers, so the plain
+ * board's glass ran on the controller's power-on curve: blacks came out
+ * navy and the dark end of a gradient barely darker than its top. These
+ * are the values from Waveshare's own Arduino demo for this board
+ * (Display_ST7789.cpp), sent after the driver's init, and bring it close to
+ * the Touch board's JD9853, which has its maker's table in its init list.
+ * Its RAM-control register (0xB0) is left out: that one changes the pixel
+ * byte order, and the frames here already arrive in the panel's order. */
+static esp_err_t st7789_tune(void)
+{
+    static const struct {
+        uint8_t cmd;
+        uint8_t data[14];
+        uint8_t len;
+    } cmds[] = {
+        {0xB2, {0x0C, 0x0C, 0x00, 0x33, 0x33}, 5}, /* porch */
+        {0xB7, {0x35}, 1},                         /* gate voltages */
+        {0xBB, {0x35}, 1},                         /* VCOM */
+        {0xC0, {0x2C}, 1},                         /* LCM control */
+        {0xC2, {0x01}, 1},                         /* VDV and VRH from registers */
+        {0xC3, {0x13}, 1},                         /* VRH */
+        {0xC4, {0x20}, 1},                         /* VDV */
+        {0xC6, {0x0F}, 1},                         /* frame rate: 60 Hz */
+        {0xD0, {0xA4, 0xA1}, 2},                   /* power control */
+        {0xD6, {0xA1}, 1},
+        {0xE0, {0xF0, 0x00, 0x04, 0x04, 0x04, 0x05, 0x29, 0x33, 0x3E, 0x38, 0x12, 0x12, 0x28, 0x30},
+         14}, /* positive gamma */
+        {0xE1, {0xF0, 0x07, 0x0A, 0x0D, 0x0B, 0x07, 0x28, 0x33, 0x3E, 0x36, 0x14, 0x14, 0x29, 0x32},
+         14}, /* negative gamma */
+    };
+    for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
+        ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(s_io, cmds[i].cmd, cmds[i].data, cmds[i].len),
+                            TAG, "st7789 0x%02X", cmds[i].cmd);
+    }
+    return ESP_OK;
+}
+
 esp_err_t board_display_init(void)
 {
     board_display_cfg_t cfg = {0};
@@ -194,6 +231,9 @@ esp_err_t board_display_init_ex(const board_display_cfg_t *cfg)
 
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(s_panel), TAG, "panel reset");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_init(s_panel), TAG, "panel init");
+    if (!board_has_touch()) {
+        ESP_RETURN_ON_ERROR(st7789_tune(), TAG, "st7789 tune");
+    }
     /* This panel ships inverted; without this everything is a photo negative. */
     ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(s_panel, true), TAG, "invert");
 
