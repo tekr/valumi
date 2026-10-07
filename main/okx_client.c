@@ -188,6 +188,7 @@ static int gunzip(int len)
  * poll that was the dominant cost. */
 static esp_err_t http_get_inner(const char *path)
 {
+    s_last_status = 0; /* or a failure here reports the previous request's */
     if (!s_h2_up) {
         struct sh2lib_config_t cfg = {
             .uri = BASE_URL,
@@ -211,7 +212,6 @@ static esp_err_t http_get_inner(const char *path)
     s_wire_len = 0;
     s_stream_done = false;
     s_gzip = false;
-    s_last_status = 0;
 
     /* Built per request because the path changes; HPACK indexes the repeated
      * ones so the wire cost is far below these lengths after the first. */
