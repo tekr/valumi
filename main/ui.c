@@ -38,9 +38,13 @@
 #define CHART_MIN_SWING 0.04f
 /* Opacity of the high-low band behind the line, 0-255. */
 #define BAND_ALPHA 80
-/* Peak opacity of the gradient fill under the sparkline, 0-255. */
+/* The fill under the line is one gradient for the whole chart, full
+ * strength at the chart's top edge and FILL_FLOOR_PCT of it at the bottom,
+ * shown from the line down. So a peak is bright and a trough is dim, and
+ * the fill reads as one shape. Opacities 0-255. */
 #define FILL_ALPHA_TOP 135
 #define FILL_ALPHA_TOP_DOWN 160 /* red needs a little more presence */
+#define FILL_FLOOR_PCT 15
 /* Up-fill: line colour lifted toward white. That trick fails for red --
  * white adds green, and red+green at low brightness reads as brown -- so the
  * down-fill is an explicit rose (red+blue only, no green contamination). */
@@ -428,6 +432,15 @@ static void draw_sparkline(uint16_t *fb, int x, int y, int w, int h, const float
 
     rgb_t ink = unpack(fill_color);
     int stride = board_display_width();
+    /* The background under the fill is black, so each row's colour is
+     * fixed: the fill is a copy, not a blend, and covers the grid dots. */
+    uint16_t row_col[SPARK_H];
+    int a_top = fill_alpha * s_alpha / 255;
+    for (int r = 0; r < h; r++) {
+        row_col[r] = 0;
+        blend_into(&row_col[r], ink,
+                   a_top * (FILL_FLOOR_PCT * h + (100 - FILL_FLOOR_PCT) * (h - r)) / (100 * h));
+    }
     for (int col = 0; col < w; col++) {
         if (x + col < cx0 || x + col >= cx1) {
             continue;
@@ -447,15 +460,9 @@ static void draw_sparkline(uint16_t *fb, int x, int y, int w, int h, const float
             }
             continue;
         }
-        /* Gradient fill, from the row the line's centre is in: the line's
-         * colour dissolving toward the bottom edge, scaled by page alpha so
-         * fades take the fill down with them. The opacity falls by the same
-         * amount each row: 8.8 fixed point. */
-        int cy = y + height_at(&line, col) / SQ;
-        int depth = (y + h) - cy + 1;
-        int fall = ((fill_alpha * s_alpha / 255) << 8) / depth;
+        int cy = y + height_at(&line, col) / SQ; /* the row the line's centre is in */
         for (int py = cy < cy0 ? cy0 : cy; py < y_end; py++) {
-            blend_into(px + py * stride, ink, (fall * ((y + h) - py)) >> 8);
+            px[py * stride] = row_col[py - y];
         }
     }
 
