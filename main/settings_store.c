@@ -68,12 +68,18 @@ static void save_timer_cb(void *arg)
     xSemaphoreGive(s_lock);
 }
 
-/* Onto s_cur, which holds the defaults. False if nothing usable is saved. */
-static bool load(nvs_handle_t h)
+typedef enum {
+    LOAD_NONE,       /* nothing saved: a first boot or a factory reset */
+    LOAD_UNREADABLE, /* something saved that could not be read this boot */
+    LOAD_OK,
+} load_result_t;
+
+/* Onto s_cur, which holds the defaults. */
+static load_result_t load(nvs_handle_t h)
 {
     size_t len = 0;
     if (nvs_get_str(h, KEY_SETTINGS, NULL, &len) != ESP_OK) {
-        return false;
+        return LOAD_NONE;
     }
     char *text = malloc(len);
     cJSON *j = NULL;
@@ -83,13 +89,13 @@ static bool load(nvs_handle_t h)
     }
     free(text);
     if (!cJSON_IsObject(j)) {
-        ESP_LOGW(TAG, "saved settings unreadable, using defaults");
+        ESP_LOGW(TAG, "saved settings unreadable, running on defaults");
         cJSON_Delete(j);
-        return false;
+        return LOAD_UNREADABLE;
     }
     settings_from_stored_json(&s_cur, j);
     cJSON_Delete(j);
-    return true;
+    return LOAD_OK;
 }
 
 /* No usable settings: take the development seed, if there is one -- unless
@@ -141,17 +147,21 @@ esp_err_t settings_store_init(void)
         ESP_LOGE(TAG, "nvs_open: %s - running on defaults", esp_err_to_name(err));
         return err;
     }
-    bool loaded = load(h);
-    if (!loaded) {
+    load_result_t loaded = load(h);
+    if (loaded == LOAD_NONE) {
         seed(h);
     }
     nvs_close(h);
-    /* Always: what was loaded may have lost or gained fields. */
-    xSemaphoreTake(s_lock, portMAX_DELAY);
-    persist_locked(&s_cur);
-    xSemaphoreGive(s_lock);
-    ESP_LOGI(TAG, "%s: %d network(s), %d coin(s)", loaded ? "loaded" : "defaults", s_cur.n_nets,
-             s_cur.n_coins);
+    /* Saved again so it carries the fields this firmware knows -- unless
+     * it could not be read, when it may only be short of memory this boot,
+     * and writing defaults over it would lose it for good. */
+    if (loaded != LOAD_UNREADABLE) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+        persist_locked(&s_cur);
+        xSemaphoreGive(s_lock);
+    }
+    ESP_LOGI(TAG, "%s: %d network(s), %d coin(s)", loaded == LOAD_OK ? "loaded" : "defaults",
+             s_cur.n_nets, s_cur.n_coins);
     return ESP_OK;
 }
 
