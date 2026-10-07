@@ -352,8 +352,8 @@ function netRow(n, i, nets, rerender){
     n.has_password ? "Leave blank to keep the saved password" : "Password (blank = open network)";
   return E("div", { class: "list-row" },
     E("div", { class: "reorder" },
-      E("button", { disabled: i === 0, onclick: () => { [nets[i-1], nets[i]] = [nets[i], nets[i-1]]; rerender(); } }, "▲"),
-      E("button", { disabled: i === nets.length - 1, onclick: () => { [nets[i+1], nets[i]] = [nets[i], nets[i+1]]; rerender(); } }, "▼")),
+      E("button", { "aria-label": "Move up", disabled: i === 0, onclick: () => { [nets[i-1], nets[i]] = [nets[i], nets[i-1]]; rerender(); } }, "▲"),
+      E("button", { "aria-label": "Move down", disabled: i === nets.length - 1, onclick: () => { [nets[i+1], nets[i]] = [nets[i], nets[i+1]]; rerender(); } }, "▼")),
     E("div", { class: "grow stack" },
       E("div", { class: "row" }, E("b", null, n.ssid),
         (n.isNew ? n.secure !== false : n.has_password) ? Lock() : E("span", { class: "small dim" }, "open")),
@@ -362,7 +362,7 @@ function netRow(n, i, nets, rerender){
         E("input", { type: "checkbox", checked: n.static_ip || false,
           onchange: (ev) => { n.static_ip = ev.target.checked; rerender(); } }), " Static IP"),
       n.static_ip ? ipFields(n) : null),
-    E("button", { class: "btn ghost", onclick: () => { nets.splice(i, 1); rerender(); } }, "✕"));
+    E("button", { class: "btn ghost", "aria-label": "Remove", onclick: () => { nets.splice(i, 1); rerender(); } }, "✕"));
 }
 function paintNetList(list, nets, rerender){
   list.innerHTML = "";
@@ -381,6 +381,7 @@ function ScanWidget(nets, rerender, title){
       box.appendChild(E("div", { class: "list-row" }, Bars(s.rssi), E("span", { class: "grow" }, s.ssid),
         s.secure ? Lock() : null,
         E("button", { class: "btn tiny", disabled: nets.length >= SET.limits.max_nets, onclick: () => {
+          if (nets.some((n) => n.ssid === s.ssid)){ toast("'" + s.ssid + "' is already in the list."); return; }
           nets.push({ ssid: s.ssid, isNew: true, secure: s.secure, pw: "", static_ip: false });
           rerender();
         } }, "Add")));
@@ -394,6 +395,7 @@ function ScanWidget(nets, rerender, title){
     scanning = false; paint();
   }
   paint(); doScan(false);
+  box.paint = paint;
   return box;
 }
 function ManualAddRow(nets, rerender){
@@ -449,9 +451,10 @@ function SetupWizard(){
 
   const nets = (SET.networks || []).map((n) => ({ ...n, isNew: false, pw: "" }));
   const list = E("div", { class: "stack" });
-  const rerender = () => paintNetList(list, nets, rerender);
+  let scan = null;
+  const rerender = () => { paintNetList(list, nets, rerender); if (scan) scan.paint(); };
   rerender();
-  const scan = ScanWidget(nets, rerender, "Nearby networks");
+  scan = ScanWidget(nets, rerender, "Nearby networks");
   const manual = ManualAddRow(nets, rerender);
 
   const err = E("div", { class: "msg err hidden" });
@@ -491,11 +494,12 @@ function StatusCard(){
   let iv = null;
   const myGen = pollGen;
 
+  function stop(){ if (iv){ clearInterval(iv); iv = null; } io.disconnect(); }
   async function refresh(){
-    if (myGen !== pollGen){ if (iv){ clearInterval(iv); iv = null; } return; }
+    if (myGen !== pollGen) return stop();
     let s;
     try { s = await api("/api/status"); } catch (e){ return; }
-    if (myGen !== pollGen){ if (iv){ clearInterval(iv); iv = null; } return; }
+    if (myGen !== pollGen) return stop();
     body.innerHTML = "";
     const w = s.wifi, sys = s.system;
     body.appendChild(E("table", { class: "stat" },
@@ -510,11 +514,13 @@ function StatusCard(){
         E("td", { class: "v" }, fmtBytes(sys.heap_min_free) + " free at lowest")) : null));
     if (s.clock_synced === false) body.appendChild(E("div", { class: "msg warn" }, "Clock not synced yet — prices may be stale."));
   }
-  refresh();
-  new IntersectionObserver((entries) => entries.forEach((e) => {
-    if (e.isIntersecting && !iv){ refresh(); iv = setInterval(refresh, 5000); }
+  /* The observer reports once as soon as it starts, which does the first refresh. */
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (myGen !== pollGen) stop();
+    else if (e.isIntersecting && !iv){ refresh(); iv = setInterval(refresh, 5000); }
     else if (!e.isIntersecting && iv){ clearInterval(iv); iv = null; }
-  })).observe(card);
+  }));
+  io.observe(card);
   return card;
 }
 
@@ -540,7 +546,7 @@ function CoinsCard(){
         const next = change(SET.coins.map((c) => ({ inst_id: c.inst_id, label: c.label })));
         const r = await apiJson("/api/settings", "PUT", { coins: next });
         SET = r.settings;
-        (r.warnings || []).forEach((w) => toast(w, "warn"));
+        if (r.warnings && r.warnings.length) toast(r.warnings.join(" "), "warn");
         return true;
       } catch (e){
         flash(err, e.message, false);
@@ -638,6 +644,7 @@ function CoinsCard(){
     oninput: (ev) => ev.target.value = ev.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") });
   const addBtn = E("button", { class: "btn small" }, "Add");
   const add = async () => {
+    if (addBtn.disabled) return;
     const id = addId.value.trim();
     if (!id) return;
     if (coins.length >= L.max_coins){ toast("Up to " + L.max_coins + " coins."); return; }
@@ -645,7 +652,7 @@ function CoinsCard(){
     addBtn.disabled = true;
     addBtn.textContent = ""; addBtn.appendChild(Spinner());
     /* The ticker checks a new coin with OKX before saving it. */
-    if (await commit(coins.concat([{ inst_id: id }]))) addId.value = "";
+    if (await commit((l) => l.concat([{ inst_id: id }]))) addId.value = "";
     addBtn.disabled = false; addBtn.textContent = "Add";
   };
   addBtn.onclick = add;
@@ -664,8 +671,12 @@ function Choice(label, key, value, options, save, hint){
   const saved = E("span", { class: "saved" }, "Saved");
   const seg = E("div", { class: "seg" });
   options.forEach(([v, name]) => seg.appendChild(E("button", { class: v === value ? "on" : "",
+    "aria-pressed": String(v === value),
     onclick: (ev) => {
-      [...seg.children].forEach((b) => b.classList.toggle("on", b === ev.target));
+      [...seg.children].forEach((b) => {
+        b.classList.toggle("on", b === ev.target);
+        b.setAttribute("aria-pressed", String(b === ev.target));
+      });
       save({ [key]: v }, saved);
     } }, name)));
   return E("div", { class: "field" }, E("label", null, label), seg,
@@ -675,7 +686,7 @@ function Choice(label, key, value, options, save, hint){
 /* A slider that moves only when its knob is dragged. A browser's own slider
    jumps to wherever it is touched, so on a phone a scroll that happened to
    start on one changed the setting; here a swipe anywhere else scrolls, and a
-   tap does nothing. o: { min, max, step, value, disabled, oninput, onchange }.
+   tap does nothing. o: { label, min, max, step, value, disabled, oninput, onchange }.
    The element's value and disabled properties read and set it. */
 function Range(o){
   const step = o.step || 1;
@@ -683,13 +694,14 @@ function Range(o){
   const fill = E("span", { class: "range-fill" });
   const thumb = E("span", { class: "range-thumb" });
   const inner = E("div", { class: "range-in" }, E("span", { class: "range-track" }, fill), thumb);
-  const el = E("div", { class: "range", role: "slider", tabindex: 0,
+  const el = E("div", { class: "range", role: "slider", tabindex: 0, "aria-label": o.label,
     "aria-valuemin": o.min, "aria-valuemax": o.max }, inner);
   const frac = () => (value - o.min) / (o.max - o.min);
   const paint = () => {
     thumb.style.left = fill.style.width = frac() * 100 + "%";
     el.setAttribute("aria-valuenow", value);
     el.classList.toggle("disabled", disabled);
+    el.setAttribute("aria-disabled", String(disabled));
   };
   const set = (v) => {
     v = Math.min(o.max, Math.max(o.min, o.min + Math.round((v - o.min) / step) * step));
@@ -736,14 +748,16 @@ function Range(o){
 function Slider(label, key, value, attrs, fmt, save, hint){
   const shown = E("span", { class: "small mono" }, fmt(value));
   const saved = E("span", { class: "saved" }, "Saved");
-  const range = Range(Object.assign({ value,
+  const range = Range(Object.assign({ value, label,
     oninput: (v) => shown.textContent = fmt(v),
     onchange: (v) => save({ [key]: v }, saved) }, attrs));
   return E("div", { class: "field" }, E("label", null, label), E("div", { class: "row" }, range, shown),
     hint ? E("div", { class: "small dim" }, hint) : null, saved);
 }
 
-function DisplayCard(){
+/* failMsg: a refused save, shown on a card rebuilt from SET so that every
+   control shows what the ticker actually kept. */
+function DisplayCard(failMsg){
   const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Display"));
   const err = E("div", { class: "msg err hidden" });
   const L = SET.limits;
@@ -753,9 +767,9 @@ function DisplayCard(){
     try {
       const r = await apiJson("/api/settings", "PUT", body);
       SET = r.settings;
-      (r.warnings || []).forEach((w) => toast(w, "warn"));
+      if (r.warnings && r.warnings.length) toast(r.warnings.join(" "), "warn");
       if (savedEl) savedTick(savedEl);
-    } catch (e){ flash(err, e.message, false); }
+    } catch (e){ card.replaceWith(DisplayCard(e.message)); }
   }
 
   card.appendChild(Slider("Time per coin", "dwell_s", SET.dwell_s,
@@ -803,11 +817,11 @@ function DisplayCard(){
   fixedBox.onchange = () => { usbRight.disabled = usbLeft.disabled = !fixedBox.checked; orientChanged(); };
   usbRight.onchange = orientChanged; usbLeft.onchange = orientChanged;
   card.appendChild(E("div", { class: "field" },
-    E("label", { class: "row small", style: "font-weight:normal;margin:0 0 8px" }, fixedBox, " Fixed orientation"),
+    E("label", { style: "font-weight:normal;margin:0 0 8px" }, fixedBox, " Fixed orientation"),
     noSensor ? E("div", { class: "small dim" }, "No motion sensor on this board.") : null,
     E("div", { class: "row wrap" },
-      E("label", { class: "row small" }, usbRight, " USB on right"),
-      E("label", { class: "row small" }, usbLeft, " USB on left")),
+      E("label", null, usbRight, " USB on right"),
+      E("label", null, usbLeft, " USB on left")),
     oriSaved));
 
   const nightSaved = E("span", { class: "saved" }, "Saved");
@@ -815,7 +829,7 @@ function DisplayCard(){
   const nStart = E("input", { type: "time", value: SET.night.start, disabled: !SET.night.on });
   const nEnd = E("input", { type: "time", value: SET.night.end, disabled: !SET.night.on });
   const nBrVal = E("span", { class: "small mono" }, SET.night.brightness + "%");
-  const nBr = Range({ min: L.bright_min, max: L.bright_max, value: SET.night.brightness,
+  const nBr = Range({ label: "Night brightness", min: L.bright_min, max: L.bright_max, value: SET.night.brightness,
     disabled: !SET.night.on, oninput: (v) => nBrVal.textContent = v + "%",
     onchange: () => nightChanged() });
   const nightPayload = () => ({ on: nOn.checked, start: nStart.value, end: nEnd.value, brightness: +nBr.value });
@@ -825,7 +839,7 @@ function DisplayCard(){
   card.appendChild(Slider("Brightness", "brightness", SET.brightness,
     { min: L.bright_min, max: L.bright_max }, (v) => v + "%", save));
   card.appendChild(E("div", { class: "field" },
-    E("label", { class: "row small" }, nOn, " Dim at night"),
+    E("label", null, nOn, " Dim at night"),
     E("div", { class: "row wrap mt" },
       E("div", { class: "stack" }, E("span", { class: "small dim" }, "From"), nStart),
       E("div", { class: "stack" }, E("span", { class: "small dim" }, "Until"), nEnd)),
@@ -838,6 +852,7 @@ function DisplayCard(){
     E("div", { class: "small dim", style: "margin-top:4px" }, "No automatic daylight saving."), tzSaved));
 
   card.appendChild(err);
+  if (failMsg) flash(err, failMsg, false);
   return card;
 }
 
@@ -847,9 +862,10 @@ function WifiCard(){
   const card = E("div", { class: "card" }, E("h2", null, E("span", { class: "bar" }), "Wi-Fi networks"));
   const nets = SET.networks.map((n) => ({ ...n, isNew: false, pw: "" }));
   const list = E("div", { class: "stack" });
-  const rerender = () => paintNetList(list, nets, rerender);
+  let scan = null;
+  const rerender = () => { paintNetList(list, nets, rerender); if (scan) scan.paint(); };
   rerender();
-  const scan = ScanWidget(nets, rerender, "Add a network");
+  scan = ScanWidget(nets, rerender, "Add a network");
   const manual = ManualAddRow(nets, rerender);
   const err = E("div", { class: "msg err hidden" });
   const applyBtn = E("button", { class: "btn primary" }, "Apply & restart");
@@ -880,12 +896,16 @@ function waitForRestart(container, then){
   const label = E("span", null, "Restarting…");
   container.appendChild(E("div", { class: "row" }, Spinner(), label));
   const start = Date.now();
+  /* The old firmware answers until the restart actually happens, so an answer
+     counts only after a poll has failed, or once 10 s have passed. */
+  let failed = false;
   const tick = async () => {
-    try { then(await api("/api/state")); return; }
-    catch (e){
-      if (Date.now() - start < 90000) setTimeout(tick, 1500);
-      else label.textContent = "Taking longer than expected — check the ticker's screen.";
-    }
+    try {
+      const s = await api("/api/state");
+      if (failed || Date.now() - start >= 10000){ then(s); return; }
+    } catch (e){ failed = true; }
+    if (Date.now() - start < 90000) setTimeout(tick, 1500);
+    else label.textContent = "Taking longer than expected — check the ticker's screen.";
   };
   setTimeout(tick, 1500);
 }
@@ -928,14 +948,23 @@ function waitForOtaRestart(container, prevVersion){
   })();
 }
 
-/* Through api(), not a plain link, so an ended session is noticed rather
-   than saved as the "backup". */
 /* A plain download, named by the ticker. Checked first, so an ended session
    shows the login rather than saving an error as the "backup". */
 async function exportSettings(){
   try { ST = await api("/api/state"); } catch (e){ toast(e.message); return; }
   if (!ST.logged_in){ if (onSessionLost) onSessionLost(); return; }
   location.href = "/api/export";
+}
+
+/* Whether the ESP app image at off in f is valumi's: true or false, or null
+   when there is no app there (at 0 in a full flash image, the bootloader).
+   A full image has its app at 0x20000. */
+async function valumiImage(f, off){
+  const b = new Uint8Array(await f.slice(off, off + 288).arrayBuffer());
+  if (b.length < 288 || b[0] !== 0xE9) return false;
+  if (b[32] !== 0x32 || b[33] !== 0x54 || b[34] !== 0xCD || b[35] !== 0xAB) return null;
+  const name = b.subarray(80, 112), end = name.indexOf(0);
+  return new TextDecoder().decode(end < 0 ? name : name.subarray(0, end)) === "valumi";
 }
 
 function DeviceCard(){
@@ -951,7 +980,7 @@ function DeviceCard(){
   }
 
   const impErr = E("div", { class: "msg err hidden" });
-  const impFile = E("input", { type: "file", accept: "application/json", class: "hidden" });
+  const impFile = E("input", { type: "file", accept: ".json,application/json", class: "hidden" });
   impFile.onchange = async () => {
     const f = impFile.files[0];
     if (!f) return;
@@ -977,12 +1006,23 @@ function DeviceCard(){
   const otaProg = E("div", { class: "progress hidden" }, E("b"));
   const otaBox = E("div", { class: "mt" });
   const otaBtn = E("button", { class: "btn small" }, "Upload");
-  otaBtn.onclick = () => {
+  const otaFail = (msg) => {
+    flash(otaErr, msg, false);
+    otaBtn.disabled = false;
+    otaProg.classList.add("hidden");
+    otaProg.querySelector("b").style.width = "0%";
+  };
+  otaBtn.onclick = async () => {
     const f = otaFile.files[0];
     if (!f){ flash(otaErr, "Choose a .bin file first.", false); return; }
     otaErr.classList.add("hidden");
-    otaProg.classList.remove("hidden");
     otaBtn.disabled = true;
+    /* The ticker refuses a wrong file by closing the connection, which the
+       browser reports only as a dropped upload, so check it here first. */
+    let ok = await valumiImage(f, 0);
+    if (ok === null && f.size >= 0x20000 + 288) ok = await valumiImage(f, 0x20000);
+    if (!ok){ otaFail("not a valumi firmware file"); return; }
+    otaProg.classList.remove("hidden");
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/ota");
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
@@ -992,14 +1032,14 @@ function DeviceCard(){
       if (xhr.status === 401 && onSessionLost){ ST.logged_in = false; onSessionLost(); return; }
       if (xhr.status >= 200 && xhr.status < 300){
         waitForOtaRestart(otaBox, ST.version);
-      } else { flash(otaErr, (data && data.error) || "upload failed", false); otaBtn.disabled = false; }
+      } else otaFail((data && data.error) || "upload failed");
     };
     xhr.onerror = async () => {
       /* A refused upload is cut off mid-body, so a lost session shows up here
          rather than as a 401. */
       try { ST = await api("/api/state"); } catch (e){}
       if (!ST.logged_in && onSessionLost){ onSessionLost(); return; }
-      flash(otaErr, "upload interrupted", false); otaBtn.disabled = false;
+      otaFail("upload stopped: the connection dropped, or the ticker refused the file");
     };
     xhr.send(f);
   };
@@ -1009,7 +1049,8 @@ function DeviceCard(){
   const restartBtn = E("button", { class: "btn" }, "Restart ticker");
   const restartBox2 = E("div", { class: "mt" });
   restartBtn.onclick = async () => {
-    if (!confirm("Restart the ticker now?")) return;
+    if (!confirm("Restart the ticker now?" + (ST.mode === "setup" ?
+      " Its hotspot gets a new password, shown on its screen: rejoin it with that, then reload this page." : ""))) return;
     try { await apiJson("/api/restart", "POST", {}); } catch (e){ toast(e.message); return; }
     waitForRestart(restartBox2, () => location.reload());
   };

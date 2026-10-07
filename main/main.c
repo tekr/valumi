@@ -660,10 +660,8 @@ void app_main(void)
          * time, and quantising frames to a fixed grid alternates "late" and
          * "waiting", which is judder. A finger on the glass counts too: the
          * idle 12.5 Hz would sample a 300 ms swipe only four times. */
-        bool animating = s_tr.active || s_spin.active || touch.down;
-        for (int i = 0; i < n && !animating; i++) {
-            animating = s_snap[i].flash > 0.0f;
-        }
+        bool animating = s_tr.active || s_spin.active || touch.down ||
+                         (n > 0 && s_snap[s_shown_page].flash > 0.0f);
         if (animating) {
             vTaskDelay(1);
             last_wake = xTaskGetTickCount();

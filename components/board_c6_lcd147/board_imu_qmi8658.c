@@ -69,12 +69,26 @@ esp_err_t qmi8658_probe(i2c_master_bus_handle_t bus)
         return ESP_ERR_NOT_FOUND;
     }
 
-    ESP_RETURN_ON_ERROR(reg_write(REG_RESET, 0xB0), TAG, "reset");
-    vTaskDelay(pdMS_TO_TICKS(15));
-    ESP_RETURN_ON_ERROR(reg_write(REG_CTRL1, 0x40), TAG, "ctrl1"); /* auto-increment reads */
-    ESP_RETURN_ON_ERROR(reg_write(REG_CTRL7, 0x03), TAG, "ctrl7"); /* enable accel + gyro */
-    ESP_RETURN_ON_ERROR(reg_write(REG_CTRL2, 0x95), TAG, "ctrl2"); /* accel +/-4 g, 250 Hz */
-    ESP_RETURN_ON_ERROR(reg_write(REG_CTRL3, 0xD5), TAG, "ctrl3"); /* gyro 512 dps, 250 Hz */
+    err = reg_write(REG_RESET, 0xB0);
+    if (err == ESP_OK) {
+        vTaskDelay(pdMS_TO_TICKS(15));
+        err = reg_write(REG_CTRL1, 0x40); /* auto-increment reads */
+    }
+    if (err == ESP_OK) {
+        err = reg_write(REG_CTRL7, 0x03); /* enable accel + gyro */
+    }
+    if (err == ESP_OK) {
+        err = reg_write(REG_CTRL2, 0x95); /* accel +/-4 g, 250 Hz */
+    }
+    if (err == ESP_OK) {
+        err = reg_write(REG_CTRL3, 0xD5); /* gyro 512 dps, 250 Hz */
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "QMI8658 setup failed: %s", esp_err_to_name(err));
+        i2c_master_bus_rm_device(s_dev);
+        s_dev = NULL;
+        return err;
+    }
 
     ESP_LOGI(TAG, "QMI8658 found at 0x%02X, accel +/-4g @ 250 Hz", QMI8658_ADDR);
     return ESP_OK;

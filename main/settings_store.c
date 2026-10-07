@@ -109,6 +109,7 @@ static void seed(nvs_handle_t h)
         nvs_commit(h);
         return;
     }
+    settings_t unseeded = s_cur;
 #ifdef APP_SEED_WIFI_NETWORKS
     static const struct {
         const char *ssid, *password;
@@ -125,6 +126,13 @@ static void seed(nvs_handle_t h)
                    "APP_SEED_PANEL_PASSWORD must be 5 characters of A-Z and 2-9");
     strlcpy(s_cur.panel_pw, APP_SEED_PANEL_PASSWORD, sizeof(s_cur.panel_pw));
 #endif
+    /* A bad seed would make every later save fail validation. */
+    char err[160];
+    if (!settings_validate(&s_cur, err, sizeof(err))) {
+        ESP_LOGE(TAG, "wifi_secrets.h seed rejected (%s); running unseeded", err);
+        s_cur = unseeded;
+    }
+    memset(&unseeded, 0, sizeof(unseeded));
 }
 
 esp_err_t settings_store_init(void)

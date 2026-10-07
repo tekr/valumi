@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "board_display.h"
@@ -149,6 +150,11 @@ static void draw_triangle_aa(uint16_t *fb, int x, int y, int w, bool up, uint16_
 
         int li = (int)ceilf(lf);
         int ri = (int)floorf(rf) - 1;
+        if (ri < li - 1) {
+            /* The apex: the whole row falls inside one pixel. */
+            board_gfx_blend_pixel(fb, li - 1, y + row, color, (uint8_t)(255.0f * (rf - lf)));
+            continue;
+        }
         if (ri >= li) {
             board_gfx_hline(fb, li, y + row, ri - li + 1, color);
         }
@@ -434,8 +440,11 @@ static void draw_sparkline(uint16_t *fb, int x, int y, int w, int h, const float
 
     /* While the page is moving, fill every other column: motion hides the
      * decimation completely, and the saved blends roughly double the
-     * transition frame rate's headroom. */
-    int col_step = (s_xoff != 0 || s_yoff != 0) ? 2 : 1;
+     * transition frame rate's headroom. Not in the last few pixels of a
+     * glide, where the page crawls and the switch back to every column
+     * would show as a flicker on landing. */
+    enum { CRAWL_PX = 8 };
+    int col_step = (abs(s_xoff) > CRAWL_PX || abs(s_yoff) > CRAWL_PX) ? 2 : 1;
     rgb_t ink = unpack(fill_color);
     int stride = board_display_width();
     for (int col = 0; col < w; col += col_step) {

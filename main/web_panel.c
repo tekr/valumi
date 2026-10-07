@@ -224,6 +224,16 @@ static void wipe_json_string(cJSON *item)
     }
 }
 
+/* Before a request body with Wi-Fi passwords in it is freed. */
+static void wipe_network_passwords(const cJSON *body)
+{
+    const cJSON *it;
+    cJSON_ArrayForEach(it, cJSON_GetObjectItemCaseSensitive(body, "networks"))
+    {
+        wipe_json_string(cJSON_GetObjectItemCaseSensitive(it, "password"));
+    }
+}
+
 /* Every restart from the panel follows a request this firmware has just
  * served, which is all probation waits to see. Without this, a new image
  * restarted within its first minute would be rolled back. */
@@ -440,7 +450,7 @@ static bool check_new_coins(const settings_t *before, const settings_t *after, c
             return false;
         }
         if (r == MARKET_COIN_UNREACHABLE) {
-            char w[80];
+            char w[96];
             snprintf(w, sizeof(w), "%s could not be checked with the exchange (offline or busy)", id);
             cJSON_AddItemToArray(warnings, cJSON_CreateString(w));
         }
@@ -512,6 +522,7 @@ static esp_err_t save_settings(httpd_req_t *req, bool import)
     ret = send_json(req, "200 OK", resp);
 done:
     cJSON_Delete(warnings);
+    wipe_network_passwords(j);
     cJSON_Delete(j);
     settings_free(before);
     settings_free(s);
@@ -586,11 +597,7 @@ static esp_err_t wifi_post(httpd_req_t *req)
         ret = send_ok(req);
         restart_soon();
     }
-    const cJSON *it;
-    cJSON_ArrayForEach(it, cJSON_GetObjectItemCaseSensitive(j, "networks"))
-    {
-        wipe_json_string(cJSON_GetObjectItemCaseSensitive(it, "password"));
-    }
+    wipe_network_passwords(j);
     cJSON_Delete(j);
     settings_free(s);
     return ret;
@@ -647,12 +654,14 @@ static esp_err_t export_get(httpd_req_t *req)
 
 /* ---- firmware ----------------------------------------------------------- */
 
+/* Where an app's description sits in its image. */
+#define APP_DESC_OFFSET (sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t))
+
 /* Refuses another app's firmware, which would boot, find no settings it
  * understands, and strand the ticker until someone found a USB cable. */
 static bool image_is_ours(const uint8_t *buf, size_t len, char *why, size_t wn)
 {
-    size_t desc_off = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t);
-    if (len < desc_off + sizeof(esp_app_desc_t)) {
+    if (len < APP_DESC_OFFSET + sizeof(esp_app_desc_t)) {
         snprintf(why, wn, "file too short to be firmware");
         return false;
     }
@@ -666,7 +675,7 @@ static bool image_is_ours(const uint8_t *buf, size_t len, char *why, size_t wn)
         return false;
     }
     esp_app_desc_t desc;
-    memcpy(&desc, buf + desc_off, sizeof(desc));
+    memcpy(&desc, buf + APP_DESC_OFFSET, sizeof(desc));
     if (desc.magic_word != ESP_APP_DESC_MAGIC_WORD) {
         snprintf(why, wn, "firmware has no app description");
         return false;
@@ -686,8 +695,15 @@ static bool image_is_ours(const uint8_t *buf, size_t len, char *why, size_t wn)
 static bool is_full_image(const uint8_t *buf, size_t len, size_t total, size_t app_offset)
 {
     const esp_image_header_t *h = (const esp_image_header_t *)buf;
-    return len >= sizeof(*h) && buf[0] == ESP_IMAGE_HEADER_MAGIC &&
-           h->chip_id == CONFIG_IDF_FIRMWARE_CHIP_ID && total > app_offset;
+    if (len < APP_DESC_OFFSET + sizeof(uint32_t) || buf[0] != ESP_IMAGE_HEADER_MAGIC ||
+        h->chip_id != CONFIG_IDF_FIRMWARE_CHIP_ID || total <= app_offset) {
+        return false;
+    }
+    /* A bootloader has no app description where an app keeps one; another
+     * project's app does, and gets its own refusal instead. */
+    uint32_t magic;
+    memcpy(&magic, buf + APP_DESC_OFFSET, sizeof(magic));
+    return magic != ESP_APP_DESC_MAGIC_WORD;
 }
 
 static esp_err_t ota_post(httpd_req_t *req)
