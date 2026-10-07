@@ -528,12 +528,16 @@ function CoinsCard(){
   const err = E("div", { class: "msg err hidden" });
 
   /* Every change saves at once, one save at a time and in order. A refused
-     save (a coin the exchange does not list, say) puts the list back as it was. */
+     save (a coin the exchange does not list, say) puts the list back as it was.
+     A change is a function of the list, applied to the saved list when its
+     turn comes: adding a coin can take many seconds, and a change queued
+     meanwhile must not drop the coin being added. */
   let queue = Promise.resolve();
-  function commit(next){
+  function commit(change){
     queue = queue.then(async () => {
       err.classList.add("hidden");
       try {
+        const next = change(SET.coins.map((c) => ({ inst_id: c.inst_id, label: c.label })));
         const r = await apiJson("/api/settings", "PUT", { coins: next });
         SET = r.settings;
         (r.warnings || []).forEach((w) => toast(w, "warn"));
@@ -555,12 +559,15 @@ function CoinsCard(){
       const label = E("input", { type: "text", maxlength: L.label_max, value: c.label,
         style: "width:64px;text-align:center;text-transform:uppercase",
         oninput: (ev) => { ev.target.value = ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); c.label = ev.target.value; },
-        onchange: () => commit(coins) });
+        onchange: () => {
+          const id = c.inst_id, v = c.label;
+          commit((l) => l.map((x) => x.inst_id === id ? { inst_id: id, label: v } : x));
+        } });
       const row = E("div", { class: "list-row coin-row" },
         E("span", { class: "grip", title: "Hold and drag to reorder" }, "⠿"),
         E("span", { class: "grow mono" }, c.inst_id), label,
-        E("button", { class: "btn ghost", disabled: coins.length <= 1,
-          onclick: () => commit(coins.filter((_, k) => k !== i)) }, "✕"));
+        E("button", { class: "btn ghost", "aria-label": "Remove", disabled: coins.length <= 1,
+          onclick: () => commit((l) => l.filter((x) => x.inst_id !== c.inst_id)) }, "✕"));
       draggable(row, i);
       list.appendChild(row);
     });
@@ -584,9 +591,13 @@ function CoinsCard(){
       row.style.transform = "";
       const d = drag; drag = null;
       if (d.at !== d.from){
-        const next = coins.slice();
-        next.splice(d.at, 0, next.splice(d.from, 1)[0]);
-        commit(next);
+        const id = coins[d.from].inst_id;
+        commit((l) => {
+          const k = l.findIndex((x) => x.inst_id === id);
+          if (k < 0) return l;
+          l.splice(d.at, 0, l.splice(k, 1)[0]);
+          return l;
+        });
       }
     };
     row.addEventListener("pointerdown", (ev) => {
