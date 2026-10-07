@@ -62,7 +62,7 @@ minute.
 
 ```sh
 pip install esptool
-esptool.py --chip esp32c6 write_flash 0x0 valumi-1.2.bin
+esptool.py --chip esp32c6 write_flash 0x0 valumi-1.3.bin
 ```
 
 **Updating.** On a ticker already running valumi, upload the firmware in
