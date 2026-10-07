@@ -157,12 +157,9 @@ skip the phone setup while developing:
 It is applied whenever the ticker has no usable settings, except on the first
 boot after a factory reset, so setup mode can still be tested.
 
-**Tests.** `make -C test/host` builds and runs the host unit tests (with
-AddressSanitizer) for the pure logic: settings and their JSON, button timing,
-sessions and login codes, captive DNS, night window, carousel, screen text,
-coin-list planning, network preference, Wi-Fi QR strings, candle merging
-and the chart path. The device test drives
-a real ticker's API over the network and restores what it changes:
+**Tests.** `make -C test/host` builds and runs the host unit tests for the
+pure logic, under AddressSanitizer. The device test drives a real ticker's
+API over the network and restores what it changes:
 
 ```sh
 python3 test/device/test_panel.py --host valumi.local --password <password> \
@@ -183,42 +180,14 @@ pin map and panel driver to match.
 | RAM | 512 KB, **no PSRAM** | same |
 | Flash | 4 MB | 8 MB |
 | Display | 1.47" IPS 172x320, **ST7789** | 1.47" IPS 172x320, **JD9853** |
-| Touch | none | AXS5106L, I2C 0x63 |
-| IMU | none | QMI8658, I2C 0x6B |
-| SPI SCLK / MOSI / MISO | 7 / 6 / 5 | 1 / 2 / 3 |
-| LCD CS / DC / RST / BL | 14 / 15 / 21 / 22 | 14 / 15 / **22 / 23** |
-| I2C SDA / SCL | free pads | 18 / 19 |
+| Touch | none | AXS5106L |
+| IMU | none | QMI8658 |
 
 <br/>
 
 Tell them apart with `esptool.py flash_id`: **C6FH4 / 4 MB** is the plain
 board, **C6FH8 / 8 MB** the touch one. The firmware targets 4 MB so the same
 image runs on either.
-
-**Board detection.** `board_variant_detect()` brings up I2C on GPIO18/19 --
-the one bus that is the same on both boards -- and looks for the touch
-controller at 0x63. Present means the touch board.
-
-**Panel settings.** For the ST7789 these differ from Waveshare's demo code,
-which uses a different driver variant with its own MADCTL handling; do not
-"fix" them to match it:
-
-<br/>
-
-| Setting | Value | Waveshare demo |
-|---|---|---|
-| Pixel clock | 80 MHz | 12 MHz |
-| Mirror | `(false, false)` | `(true, false)` |
-| Colour order | RGB | BGR |
-| Invert colour | `true` | not set |
-| X gap | 34 px | 34 px |
-
-<br/>
-
-The JD9853 takes the same landscape settings -- `swap_xy`, `mirror(true,
-false)`, y gap 34, invert on, 80 MHz. ESP-IDF has no JD9853 driver, so one
-lives in `components/board_c6_lcd147/board_lcd_jd9853.c`. Full pin map:
-`components/board_c6_lcd147/include/board_pins.h`.
 
 ## How it works
 
@@ -235,14 +204,10 @@ lives in `components/board_c6_lcd147/board_lcd_jd9853.c`. Full pin map:
   its captive portal.
 - `settings*.c` -- settings, stored in NVS as JSON. Robust to firmware updates
   that add/remove fields.
-- `firmware.c` -- an over-the-air update is rolled back if the ticker restarts
-  before the panel has been reachable for 60s (a restart from the panel
-  counts as confirmation).
+- `firmware.c` -- over-the-air updates, with rollback.
 
-The display runs single-buffered by necessity due to limited RAM. Exchange
-responses are buffered only while being handled; TLS uses mbedTLS's dynamic
-buffers. The panel's status shows a warning if free memory has ever dropped
-below 10 KB.
+RAM is tight: the framebuffer alone takes 110 KB of the 512 KB, so the
+display is single-buffered and every frame is drawn straight into it.
 
 Design notes for the panel: [`docs/web-panel-design.md`](docs/web-panel-design.md).
 
