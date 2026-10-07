@@ -688,10 +688,11 @@ def test_restart_needs_json(ctx):
 def test_import_skips_unknown_network(ctx):
     exported = get(ctx, "/api/export").json()
     before = get(ctx, "/api/settings").json()["networks"]
-    exported["networks"] = exported["networks"] + [
-        {"ssid": "NoSuchNetwork-test", "has_password": True, "static_ip": False}]
-    if len(exported["networks"]) > 4:
-        exported["networks"] = exported["networks"][-4:]
+    # The fake network is skipped on import, so the list must still hold
+    # every real one: with the list full, it stands in for the last entry
+    # rather than pushing the first one off.
+    fake = {"ssid": "NoSuchNetwork-test", "has_password": True, "static_ip": False}
+    exported["networks"] = exported["networks"][:3] + [fake]
     r = post_json(ctx, "/api/import", exported)
     assert_status(r, 200)
     body = r.json()
