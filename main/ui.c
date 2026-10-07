@@ -2,7 +2,6 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "board_display.h"
@@ -427,16 +426,9 @@ static void draw_sparkline(uint16_t *fb, int x, int y, int w, int h, const float
     board_gfx_get_clip(&cx0, &cy0, &cx1, &cy1);
     int y_end = y + h < cy1 ? y + h : cy1;
 
-    /* While the page is moving, fill every other column: motion hides the
-     * decimation completely, and the saved blends roughly double the
-     * transition frame rate's headroom. Not in the last few pixels of a
-     * glide, where the page crawls and the switch back to every column
-     * would show as a flicker on landing. */
-    enum { CRAWL_PX = 8 };
-    int col_step = (abs(s_xoff) > CRAWL_PX || abs(s_yoff) > CRAWL_PX) ? 2 : 1;
     rgb_t ink = unpack(fill_color);
     int stride = board_display_width();
-    for (int col = 0; col < w; col += col_step) {
+    for (int col = 0; col < w; col++) {
         if (x + col < cx0 || x + col >= cx1) {
             continue;
         }
